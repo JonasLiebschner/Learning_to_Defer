@@ -19,18 +19,47 @@ from sklearn.model_selection import StratifiedKFold
 from tqdm import tqdm
 from tabulate import tabulate
 
-class NIH_Dataset(Dataset):
-    def __init__(self, PATH, data: pd.DataFrame, preload=False, preprocess=False) -> None:
-        self.PATH = PATH
-        self.image_ids = data["Image ID"].values
-        self.targets = data["GT_Label"].values
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+class BasicDataset():
+    """
+    Contains the main Dataset with GT Label and Expert Label for every Image, sorted by file name
+    """
+    def __init__(self, Path, target):
+        df = pd.read_csv(Path + "labels.csv")
+        ids = df["Reader ID"].unique()
+        result = df[["Patient ID", "Image ID", target + "_GT_Label"]].drop_duplicates().rename(columns={target + "_GT_Label": 'GT'})
+        for reader_id in ids:
+            temp = df[df["Reader ID"] == reader_id][["Image ID", target + "_Expert_Label"]].rename(columns={target + "_Expert_Label": str(reader_id)})
+            result = result.join(temp.set_index('Image ID'), on='Image ID')
+        self.data = result.fillna(-1).reset_index(drop=True)
 
-        self.tfms = transforms.Compose(
+    def getExpert(self, id):
+        """
+        Returns the data for the given expert
+        """
+        return result["Image ID", "GT", str(id)]
+
+    def getData(self):
+        return self.data
+
+class NIHDataset():
+    """
+    """
+    def __init__(self, data: pd.DataFrame, transformation=None, preload=False, preprocess=False, param=None):
+        self.data = data
+        self.image_ids = data["Image ID"].values
+        self.targets = data["GT"].values
+
+        if transformation == None:
+            self.tfms = transforms.Compose(
             [
               transforms.ToTensor(),
               transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
             ])
+        else:
+            self.tfms = transformation
+            
+        self.param = param
+        self.PATH = param["PATH"]
 
         self.images = []
         
@@ -74,7 +103,7 @@ class NIH_Dataset(Dataset):
         """
         Transforms the image
         """
-        return self.tfms(image).to(self.device)
+        return self.tfms(image).to(device)
         
     def __getitem__(self, index: int) -> Tuple[Any, Any]:
         filename, target = self.image_ids[index], self.targets[index]
@@ -88,59 +117,59 @@ class NIH_Dataset(Dataset):
         return len(self.image_ids)
 
 class NIH_K_Fold_Dataloader:
-    def __init__(self, k=10, labelerIds=[4323195249, 4295194124], target="Airspace_Opacity", train_batch_size=8, test_batch_size=8,
-                 seed=42, fraction=1.0, maxLabels=800, PATH="", preload=False, preprocess=False):
+    def __init__(self, dataset, k=10, labelerIds=[4323195249, 4295194124], train_batch_size=8, test_batch_size=8,
+                 seed=42, fraction=1.0, maxLabels=800, preload=False, preprocess=False, param=None):
+        self.dataset = dataset.getData()
         self.k = k
         self.labelerIds = labelerIds
-        self.target = target
         self.train_batch_size = train_batch_size
         self.test_batch_size = test_batch_size
         self.seed = seed
         self.k_fold_datasets = []
         self.k_fold_patient_ids = []
-        self.PATH=PATH
+        self.PATH=param["PATH"]
         self.preload = preload
         self.preprocess = preprocess
+        self.param = param
 
-        individual_labels = pd.read_csv(PATH + "labels.csv")
+        #TODO: Implement support for non overlapping Labels
 
-        # get image ids for those aimages labelled by both radiologists
-        common_image_ids = individual_labels["Image ID"].values.tolist()
-        for labelerId in self.labelerIds:
-            expert_labels = individual_labels[individual_labels["Reader ID"] == labelerId]
-            expert_image_ids = expert_labels["Image ID"].values.tolist()
-            common_image_ids = np.intersect1d(common_image_ids, expert_image_ids)
+        ##
+        self.common = True
+        if self.common:
+            self.common_image_ids = self.dataset["Image ID"].values.tolist()
+            names = ["Patient ID", "Image ID", "GT"]
+            for labelerId in self.labelerIds:
+                temp = self.dataset[self.dataset[str(labelerId)] != -1]["Image ID"].values.tolist()
+                self.common_image_ids = np.intersect1d(self.common_image_ids, temp)
+                names.append(str(labelerId))
+            self.data = self.dataset[self.dataset["Image ID"].isin(self.common_image_ids)][names]
 
-        # filter labels by common images ids
-        self.expert_labels = individual_labels[individual_labels["Image ID"].isin(common_image_ids)][
-            ["Reader ID", "Image ID", self.target + "_Expert_Label", self.target + "_GT_Label", "Patient ID"]]
-
-        self.expert_labels.columns = ["Reader ID", "Image ID", "Expert_Label", "GT_Label", "Patient ID"]
-
-        # transform data for stratification. Calculate the performance of each radiologists for each patient
-        self.expert_labels["Expert_Correct"] = self.expert_labels["Expert_Label"] == self.expert_labels["GT_Label"]
-
-        patient_ids = self.expert_labels["Patient ID"].unique()
-        num_patient_images = self.expert_labels.drop_duplicates(subset=["Image ID"]).groupby(by="Patient ID", as_index=False).count()["Image ID"]
+        #Performance
+        self.patient_ids = self.data["Patient ID"].unique()
+        num_patient_images = self.data.drop_duplicates(subset=["Image ID"]).groupby(by="Patient ID", as_index=False).count()["Image ID"]
         self.patient_performance = pd.DataFrame({"Patient ID": patient_ids, "Num Patient Images": num_patient_images})
-
+                     
         for labeler_id in self.labelerIds:
-            sum = self.expert_labels[self.expert_labels["Reader ID"] == labeler_id][["Patient ID", "Expert_Correct"]].groupby(by="Patient ID",
-                                                                                                                       as_index=False).sum()
+            temp = self.data[["Patient ID", "Image ID", "GT", str(labeler_id)]]
+            temp["Expert_Correct"] = expert_labels["GT"] == self.data[str(labeler_id)]
+            sum = temp[["Patient ID", "Expert_Correct"]].groupby(by="Patient ID", as_index=False).sum()
             sum.columns = ["Patient ID", f'{labeler_id}_num_correct']
             self.patient_performance = pd.merge(self.patient_performance, sum, left_on="Patient ID", right_on="Patient ID")
             self.patient_performance[f'{labeler_id}_perf'] = self.patient_performance[f'{labeler_id}_num_correct'] / self.patient_performance['Num Patient Images']
 
-        # create target variable used for stratification. Target variable is the combination of radiologist#1 performance and radiologist#2 performance
-        self.patient_performance["target"] = self.patient_performance[f'{self.labelerIds[0]}_perf'].astype(str) + "_" + self.patient_performance[
-            f'{self.labelerIds[1]}_perf'].astype(str)
+        target_temp = patient_performance[f'{labelerIds[0]}_perf'].astype(str)
+        for labeler_id in labelerIds[1:]:
+            target_temp = target_temp + "_" + patient_performance[f'{labeler_id}_perf'].astype(str)
+        self.patient_performance["target"] = target_temp 
 
+        self.expert_labels = self.data
         self._init_k_folds(maxLabels=maxLabels)
 
     def _init_k_folds(self, fraction=1.0, maxLabels=800):
         self.labels = self.expert_labels.drop_duplicates(subset=["Image ID"])
         self.labels = self.labels.fillna(0)
-        self.labels = self.labels[["Patient ID", "Image ID", "GT_Label"]]
+        self.labels = self.labels[["Patient ID", "Image ID", "GT"]]
 
         kf_cv = StratifiedKFold(n_splits=self.k, shuffle=True, random_state=self.seed)
 
@@ -194,9 +223,9 @@ class NIH_K_Fold_Dataloader:
             overlap = expert_val[expert_val["Patient ID"].isin(expert_test["Patient ID"])]
             assert len(overlap) == 0, "Val and Test Patient Ids overlap"
 
-            expert_train = expert_train[["Image ID", "GT_Label"]]
-            expert_val = expert_val[["Image ID", "GT_Label"]]
-            expert_test = expert_test[["Image ID", "GT_Label"]]
+            expert_train = expert_train[["Image ID", "GT"]]
+            expert_val = expert_val[["Image ID", "GT"]]
+            expert_test = expert_test[["Image ID", "GT"]]
 
             self.k_fold_datasets.append((expert_train, expert_val, expert_test))
 
@@ -211,6 +240,11 @@ class NIH_K_Fold_Dataloader:
         val_loader = torch.utils.data.DataLoader(dataset=expert_val_dataset, batch_size=self.test_batch_size, shuffle=True, drop_last=False)
         test_loader = torch.utils.data.DataLoader(dataset=expert_test_dataset, batch_size=self.test_batch_size, shuffle=True, drop_last=False)
         return train_loader, val_loader, test_loader
+
+    def get_dataset_for_folder(self, fold_idx):
+        expert_train, expert_val, expert_test = self.k_fold_datasets[fold_idx]
+
+        return expert_train, expert_val, expert_test
     
 def setupLabels(PATH_Labels):
     path_to_test_Labels = PATH_Labels + "test_labels.csv"
