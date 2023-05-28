@@ -279,7 +279,7 @@ def evaluate_one_epoch(epoch, feature_extractor, classifier, allocation_system, 
 
     return system_accuracy, system_loss, system_preds, allocation_system_decisions, targets
 
-def run_team_performance_optimization(method, seed, expert_fns, PATH, maxLabels=800, param=None):
+def run_team_performance_optimization(method, seed, nih_dataloader, expert_fns, PATH, maxLabels=800, param=None):
     print(f'Team Performance Optimization with {method}')
     
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -294,17 +294,6 @@ def run_team_performance_optimization(method, seed, expert_fns, PATH, maxLabels=
         allocation_system_activation_function = "softmax"
 
     feature_extractor = Resnet().to(device)
-
-    nih_dataloader = ds.NIH_K_Fold_Dataloader(
-        param["K"],
-        param["LABELER_IDS"],
-        param["TARGET"],
-        param["TRAIN_BATCH_SIZE"],
-        param["TEST_BATCH_SIZE"],
-        seed,
-        maxLabels=maxLabels,
-        PATH=PATH
-    )
 
     overall_allocation_system_decisions = []
     overall_system_preds = []
@@ -358,17 +347,7 @@ def run_team_performance_optimization(method, seed, expert_fns, PATH, maxLabels=
     
     return system_accuracy, classifier_coverage
 
-def get_accuracy_of_best_expert(seed, expert_fns, PATH, maxLabels=800, param=None):
-    nih_dataloader = ds.NIH_K_Fold_Dataloader(
-        param["K"],
-        param["LABELER_IDS"],
-        param["TARGET"],
-        param["TRAIN_BATCH_SIZE"],
-        param["TEST_BATCH_SIZE"],
-        seed,
-        maxLabels=maxLabels,
-        PATH=PATH
-    )
+def get_accuracy_of_best_expert(seed, nih_dataloader, expert_fns, PATH, maxLabels=800, param=None):
 
     targets = []
     filenames = []
@@ -396,17 +375,7 @@ def get_accuracy_of_best_expert(seed, expert_fns, PATH, maxLabels=800, param=Non
 
     return max(expert_accuracies)
 
-def get_accuracy_of_average_expert(seed, expert_fns, PATH, maxLabels=800, param=None):
-    nih_dataloader = ds.NIH_K_Fold_Dataloader(
-        param["K"],
-        param["LABELER_IDS"],
-        param["TARGET"],
-        param["TRAIN_BATCH_SIZE"],
-        param["TEST_BATCH_SIZE"],
-        seed,
-        maxLabels=maxLabels,
-        PATH=PATH
-    )
+def get_accuracy_of_average_expert(seed, nih_dataloader, expert_fns, PATH, maxLabels=800, param=None):
 
     targets = []
     filenames = []
@@ -480,23 +449,12 @@ def evaluate_full_automation_one_epoch(epoch, feature_extractor, classifier, dat
 
     return full_automation_loss, classifier_preds, targets
 
-def run_full_automation(seed, PATH, maxLabels=800, param=None):
+def run_full_automation(seed, nih_dataloader, PATH, maxLabels=800, param=None):
     print(f'Training full automation baseline')
     
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     feature_extractor = Resnet().to(device)
-
-    nih_dataloader = ds.NIH_K_Fold_Dataloader(
-        param["K"],
-        param["LABELER_IDS"],
-        param["TARGET"],
-        param["TRAIN_BATCH_SIZE"],
-        param["TEST_BATCH_SIZE"],
-        seed,
-        maxLabels=maxLabels,
-        PATH=PATH
-    )
 
     overall_classifier_preds = []
     overall_targets = []
@@ -606,23 +564,12 @@ def evaluate_moae_one_epoch(feature_extractor, classifiers, allocation_system, d
 
     return moae_loss, team_preds, targets
 
-def run_moae(seed, PATH, maxLabels=800, param=None):
+def run_moae(seed, nih_dataloader, PATH, maxLabels=800, param=None):
     print(f'Training Mixture of artificial experts baseline')
     
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     feature_extractor = Resnet().to(device)
-
-    nih_dataloader = ds.NIH_K_Fold_Dataloader(
-        param["K"],
-        param["LABELER_IDS"],
-        param["TARGET"],
-        param["TRAIN_BATCH_SIZE"],
-        param["TEST_BATCH_SIZE"],
-        seed,
-        maxLabels=maxLabels,
-        PATH=PATH
-    )
 
     overall_system_preds = []
     overall_targets = []
@@ -736,23 +683,12 @@ def evaluate_mohe_one_epoch(feature_extractor, allocation_system, data_loader, e
     
     return mohe_loss, team_preds, targets
 
-def run_mohe(seed, expert_fns, PATH, maxLabels=800, param=None):
+def run_mohe(seed, nih_dataloader, expert_fns, PATH, maxLabels=800, param=None):
     print(f'Training Mixture of human experts baseline')
     
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     feature_extractor = Resnet().to(device)
-
-    nih_dataloader = ds.NIH_K_Fold_Dataloader(
-        param["K"],
-        param["LABELER_IDS"],
-        param["TARGET"],
-        param["TRAIN_BATCH_SIZE"],
-        param["TEST_BATCH_SIZE"],
-        seed,
-        maxLabels=maxLabels,
-        PATH=PATH
-    )
 
     overall_system_preds = []
     overall_targets = []
