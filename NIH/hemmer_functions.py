@@ -221,7 +221,7 @@ def train_one_epoch(epoch, feature_extractor, classifier, allocation_system, tra
 
         expert_batch_preds = np.empty((param["NUM_EXPERTS"], len(batch_targets)))
         for idx, expert_fn in enumerate(expert_fns):
-            expert_batch_preds[idx] = np.array(expert_fn(batch_filenames))
+            expert_batch_preds[idx] = np.array(expert_fn(batch_input, batch_targets, batch_filenames))
 
         batch_features = feature_extractor(batch_input)
         batch_outputs_classifier = classifier(batch_features)
@@ -246,10 +246,18 @@ def evaluate_one_epoch(epoch, feature_extractor, classifier, allocation_system, 
     classifier_outputs = torch.tensor([]).to(device)
     allocation_system_outputs = torch.tensor([]).to(device)
     targets = torch.tensor([]).to(device)
+
+    inputs_list = []
+    targets_list = []
     filenames = []
 
     with torch.no_grad():
         for i, (batch_input, batch_targets, batch_filenames) in enumerate(data_loader):
+
+            inputs_list.extend(batch_input)
+            targets_list.extend(list(batch_targets.numpy()))
+            filenames.extend(batch_filenames)
+            
             batch_input = batch_input.to(device)
             batch_targets = batch_targets.to(device)
 
@@ -260,11 +268,11 @@ def evaluate_one_epoch(epoch, feature_extractor, classifier, allocation_system, 
             classifier_outputs = torch.cat((classifier_outputs, batch_classifier_outputs))
             allocation_system_outputs = torch.cat((allocation_system_outputs, batch_allocation_system_outputs))
             targets = torch.cat((targets, batch_targets))
-            filenames.extend(batch_filenames)
+            
 
     expert_preds = np.empty((param["NUM_EXPERTS"], len(targets)))
     for idx, expert_fn in enumerate(expert_fns):
-        expert_preds[idx] = np.array(expert_fn(filenames))
+        expert_preds[idx] = np.array(expert_fn(inputs_list, targets_list, filenames))
 
     classifier_outputs = classifier_outputs.cpu().numpy()
     allocation_system_outputs = allocation_system_outputs.cpu().numpy()
@@ -349,7 +357,8 @@ def run_team_performance_optimization(method, seed, nih_dataloader, expert_fns, 
 
 def get_accuracy_of_best_expert(seed, nih_dataloader, expert_fns, PATH, maxLabels=800, param=None):
 
-    targets = []
+    inputs_list = []
+    targets_list = []
     filenames = []
     
     for fold_idx in range(param["K"]):
@@ -357,18 +366,19 @@ def get_accuracy_of_best_expert(seed, nih_dataloader, expert_fns, PATH, maxLabel
         _, _, test_loader = nih_dataloader.get_data_loader_for_fold(fold_idx)
   
         with torch.no_grad():
-            for i, (_, batch_targets, batch_filenames) in enumerate(test_loader):
-                targets.extend(list(batch_targets.numpy()))
+            for i, (batch_input, batch_targets, batch_filenames) in enumerate(test_loader):
+                inputs_list.extend(batch_input)
+                targets_list.extend(list(batch_targets.numpy()))
                 filenames.extend(batch_filenames)
 
-    expert_preds = np.empty((param["NUM_EXPERTS"], len(targets)))
+    expert_preds = np.empty((param["NUM_EXPERTS"], len(targets_list)))
     for idx, expert_fn in enumerate(expert_fns):
-        expert_preds[idx] = np.array(expert_fn(filenames))
+        expert_preds[idx] = np.array(expert_fn(inputs_list, targets_list, filenames))
 
     expert_accuracies = []
     for idx in range(param["NUM_EXPERTS"]):
         preds = expert_preds[idx]
-        acc = accuracy_score(targets, preds)
+        acc = accuracy_score(targets_list, preds)
         expert_accuracies.append(acc)
 
     print(f'Best Expert Accuracy: {max(expert_accuracies)}\n')
@@ -377,7 +387,8 @@ def get_accuracy_of_best_expert(seed, nih_dataloader, expert_fns, PATH, maxLabel
 
 def get_accuracy_of_average_expert(seed, nih_dataloader, expert_fns, PATH, maxLabels=800, param=None):
 
-    targets = []
+    inputs_list = []
+    targets_list = []
     filenames = []
 
     for fold_idx in range(param["K"]):
@@ -385,14 +396,15 @@ def get_accuracy_of_average_expert(seed, nih_dataloader, expert_fns, PATH, maxLa
         _, _, test_loader = nih_dataloader.get_data_loader_for_fold(fold_idx)
   
         with torch.no_grad():
-            for i, (_, batch_targets, batch_filenames) in enumerate(test_loader):
-                targets.extend(list(batch_targets.numpy()))
+            for i, (batch_input, batch_targets, batch_filenames) in enumerate(test_loader):
+                inputs_list.extend(batch_input)
+                targets_list.extend(list(batch_targets.numpy()))
                 filenames.extend(batch_filenames)
 
 
     avg_expert = NihAverageExpert(expert_fns)
-    avg_expert_preds = avg_expert.predict(filenames)
-    avg_expert_acc = accuracy_score(targets, avg_expert_preds)
+    avg_expert_preds = avg_expert.predict(inputs_list, targets_list, filenames)
+    avg_expert_acc = accuracy_score(targets_list, avg_expert_preds)
     print(f'Average Expert Accuracy: {avg_expert_acc}\n')
 
     return avg_expert_acc
@@ -629,7 +641,7 @@ def train_mohe_one_epoch(feature_extractor, allocation_system, train_loader, opt
 
         expert_batch_preds = np.empty((param["NUM_EXPERTS"], len(batch_targets)))
         for idx, expert_fn in enumerate(expert_fns):
-            expert_batch_preds[idx] = np.array(expert_fn(batch_filenames))
+            expert_batch_preds[idx] = np.array(expert_fn(batch_input, batch_targets, batch_filenames))
 
         batch_features = feature_extractor(batch_input)
         batch_outputs_allocation_system = allocation_system(batch_features)
@@ -653,10 +665,18 @@ def evaluate_mohe_one_epoch(feature_extractor, allocation_system, data_loader, e
 
     allocation_system_outputs = torch.tensor([]).to(device)
     targets = torch.tensor([]).long().to(device)
+
+    inputs_list = []
+    targets_list = []
     filenames = []
 
     with torch.no_grad():
         for i, (batch_input, batch_targets, batch_filenames) in enumerate(data_loader):
+
+            inputs_list.extend(batch_input)
+            targets_list.extend(list(batch_targets.numpy()))
+            filenames.extend(batch_filenames)
+            
             batch_input = batch_input.to(device)
             batch_targets = batch_targets.to(device)
 
@@ -665,11 +685,12 @@ def evaluate_mohe_one_epoch(feature_extractor, allocation_system, data_loader, e
 
             allocation_system_outputs = torch.cat((allocation_system_outputs, batch_allocation_system_outputs))
             targets = torch.cat((targets, batch_targets.float()))
-            filenames.extend(batch_filenames)
+
+            
 
     expert_preds = np.empty((param["NUM_EXPERTS"], len(targets)))
     for idx, expert_fn in enumerate(expert_fns):
-        expert_preds[idx] = np.array(expert_fn(filenames))
+        expert_preds[idx] = np.array(expert_fn(inputs_list, targets_list, filenames))
 
     mohe_loss = mixture_of_human_experts_loss(allocation_system_output=allocation_system_outputs,
                                                    human_expert_preds=expert_preds, targets=targets.long(), param=param)
@@ -730,8 +751,8 @@ class NihAverageExpert:
         self.expert_fns = expert_fns
         self.num_experts = len(self.expert_fns)
 
-    def predict(self, filenames):
-        all_experts_predictions = [expert_fn(filenames) for expert_fn in self.expert_fns]
+    def predict(self, input, targets, filenames):
+        all_experts_predictions = [expert_fn(input, targets, filenames) for expert_fn in self.expert_fns]
         predictions = [None] * len(filenames)
 
         for idx, expert_predictions in enumerate(all_experts_predictions):

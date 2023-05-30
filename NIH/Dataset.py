@@ -19,7 +19,7 @@ from sklearn.model_selection import StratifiedKFold
 from tqdm import tqdm
 from tabulate import tabulate
 
-class BasicDataset():
+class BasicDataset:
     """
     Contains the main Dataset with GT Label and Expert Label for every Image, sorted by file name
     """
@@ -41,7 +41,7 @@ class BasicDataset():
     def getData(self):
         return self.data
 
-class NIHDataset():
+class NIHDataset:
     """
     """
     def __init__(self, data: pd.DataFrame, transformation=None, preload=False, preprocess=False, param=None):
@@ -62,6 +62,8 @@ class NIHDataset():
         self.PATH = param["PATH"]
 
         self.images = []
+
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         
         self.preload = preload
         self.preprocess = preprocess
@@ -90,20 +92,20 @@ class NIHDataset():
         """
         count = 0
         for idx in range(len(self.image_ids)):
-            if count % 1000 == 0:
-                print("Loaded " + str(count) + " images")
+            #if count % 1000 == 0:
+                #print("Loaded " + str(count) + " images")
             count += 1
             if self.preprocess:
                 self.images.append(self.transformImage(self.loadImage(idx)))
             else:
                 self.images.append(self.loadImage(idx))
-        print("Loading complete")
+        #print("Loading complete")
         
     def transformImage(self, image):
         """
         Transforms the image
         """
-        return self.tfms(image).to(device)
+        return self.tfms(image).to(self.device)
         
     def __getitem__(self, index: int) -> Tuple[Any, Any]:
         filename, target = self.image_ids[index], self.targets[index]
@@ -118,7 +120,7 @@ class NIHDataset():
 
 class NIH_K_Fold_Dataloader:
     def __init__(self, dataset, k=10, labelerIds=[4323195249, 4295194124], train_batch_size=8, test_batch_size=8,
-                 seed=42, fraction=1.0, maxLabels=800, preload=False, preprocess=False, param=None):
+                 seed=42, fraction=1.0, maxLabels=800, preload=False, preprocess=False, prebuild=False, param=None):
         self.dataset = dataset.getData()
         self.k = k
         self.labelerIds = labelerIds
@@ -127,10 +129,10 @@ class NIH_K_Fold_Dataloader:
         self.seed = seed
         self.k_fold_datasets = []
         self.k_fold_patient_ids = []
-        self.PATH=param["PATH"]
         self.preload = preload
         self.preprocess = preprocess
         self.param = param
+        self.prebuild = prebuild
 
         #TODO: Implement support for non overlapping Labels
 
@@ -146,25 +148,28 @@ class NIH_K_Fold_Dataloader:
             self.data = self.dataset[self.dataset["Image ID"].isin(self.common_image_ids)][names]
 
         #Performance
-        self.patient_ids = self.data["Patient ID"].unique()
+        patient_ids = self.data["Patient ID"].unique()
         num_patient_images = self.data.drop_duplicates(subset=["Image ID"]).groupby(by="Patient ID", as_index=False).count()["Image ID"]
         self.patient_performance = pd.DataFrame({"Patient ID": patient_ids, "Num Patient Images": num_patient_images})
                      
         for labeler_id in self.labelerIds:
             temp = self.data[["Patient ID", "Image ID", "GT", str(labeler_id)]]
-            temp["Expert_Correct"] = expert_labels["GT"] == self.data[str(labeler_id)]
+            temp["Expert_Correct"] = self.data["GT"] == self.data[str(labeler_id)]
             sum = temp[["Patient ID", "Expert_Correct"]].groupby(by="Patient ID", as_index=False).sum()
             sum.columns = ["Patient ID", f'{labeler_id}_num_correct']
             self.patient_performance = pd.merge(self.patient_performance, sum, left_on="Patient ID", right_on="Patient ID")
             self.patient_performance[f'{labeler_id}_perf'] = self.patient_performance[f'{labeler_id}_num_correct'] / self.patient_performance['Num Patient Images']
 
-        target_temp = patient_performance[f'{labelerIds[0]}_perf'].astype(str)
+        target_temp = self.patient_performance[f'{labelerIds[0]}_perf'].astype(str)
         for labeler_id in labelerIds[1:]:
-            target_temp = target_temp + "_" + patient_performance[f'{labeler_id}_perf'].astype(str)
+            target_temp = target_temp + "_" + self.patient_performance[f'{labeler_id}_perf'].astype(str)
         self.patient_performance["target"] = target_temp 
 
         self.expert_labels = self.data
         self._init_k_folds(maxLabels=maxLabels)
+
+        if self.prebuild:
+            self.buildDataloaders()
 
     def _init_k_folds(self, fraction=1.0, maxLabels=800):
         self.labels = self.expert_labels.drop_duplicates(subset=["Image ID"])
@@ -230,21 +235,35 @@ class NIH_K_Fold_Dataloader:
             self.k_fold_datasets.append((expert_train, expert_val, expert_test))
 
     def get_data_loader_for_fold(self, fold_idx):
+        if self.prebuild:
+            return self.loaders[fold_idx][0], self.loaders[fold_idx][1], self.loaders[fold_idx][2]
+        else:
+            return self.create_Dataloader_for_Fold(fold_idx)
+
+    def get_dataset_for_folder(self, fold_idx):
         expert_train, expert_val, expert_test = self.k_fold_datasets[fold_idx]
 
-        expert_train_dataset = NIH_Dataset(self.PATH, expert_train, preload=self.preload, preprocess=self.preprocess)
-        expert_val_dataset = NIH_Dataset(self.PATH, expert_val, preload=self.preload, preprocess=self.preprocess)
-        expert_test_dataset = NIH_Dataset(self.PATH, expert_test, preload=self.preload, preprocess=self.preprocess)
+        return expert_train, expert_val, expert_test
+
+    def create_Dataloader_for_Fold(self, idx):
+        expert_train, expert_val, expert_test = self.k_fold_datasets[idx]
+
+        expert_train_dataset = NIHDataset(expert_train, preload=self.preload, preprocess=self.preprocess, param=self.param)
+        expert_val_dataset = NIHDataset(expert_val, preload=self.preload, preprocess=self.preprocess, param=self.param)
+        expert_test_dataset = NIHDataset(expert_test, preload=self.preload, preprocess=self.preprocess, param=self.param)
 
         train_loader = torch.utils.data.DataLoader(dataset=expert_train_dataset, batch_size=self.train_batch_size, shuffle=True, drop_last=True)
         val_loader = torch.utils.data.DataLoader(dataset=expert_val_dataset, batch_size=self.test_batch_size, shuffle=True, drop_last=False)
         test_loader = torch.utils.data.DataLoader(dataset=expert_test_dataset, batch_size=self.test_batch_size, shuffle=True, drop_last=False)
         return train_loader, val_loader, test_loader
 
-    def get_dataset_for_folder(self, fold_idx):
-        expert_train, expert_val, expert_test = self.k_fold_datasets[fold_idx]
-
-        return expert_train, expert_val, expert_test
+    def buildDataloaders(self):
+        self.loaders = []
+        for i in range(self.k):
+            train_loader, val_loader, test_loader = self.create_Dataloader_for_Fold(i)
+            loader_set = [train_loader, val_loader, test_loader]
+            self.loaders.append(loader_set)
+            print("Loaded set number " + str(i))
     
 def setupLabels(PATH_Labels):
     path_to_test_Labels = PATH_Labels + "test_labels.csv"
