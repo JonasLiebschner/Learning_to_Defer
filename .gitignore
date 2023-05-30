@@ -130,3 +130,5 @@ dmypy.json
 
 #Neptune
 .neptune/
+
+neptune_config.json
