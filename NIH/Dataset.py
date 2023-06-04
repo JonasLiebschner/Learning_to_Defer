@@ -67,9 +67,23 @@ class NIHDataset:
         
         self.preload = preload
         self.preprocess = preprocess
+
+        self.image_list = np.empty(0)
+        
+        self.current = 0
+        self.high = len(self.image_ids)
         
         if self.preload:
             self.loadImages()
+            
+    def __iter__(self):
+        return self
+    
+    def __next__(self):
+        self.current += 1
+        if self.current < self.high:
+            return self.__getitem__(self.current)
+        raise StopIteration
             
     def loadImage(self, idx):
         """
@@ -117,6 +131,49 @@ class NIHDataset:
     def __len__(self) -> int:
         #return len(self.images)
         return len(self.image_ids)
+
+    """
+    Functions for Verma active learning
+    """
+    def getAllImagesNP(self):
+        """
+        Returns all images from the Dataset
+        """
+        if not self.preload:
+            self.preload = True
+            self.loadImages()
+        if self.image_list.size == 0:
+            image_liste = []
+            for img in self.images:
+                #np_img = np.moveaxis(np.array(img), -1, 0)
+                np_img = np.array(img)
+                image_liste.append(np_img)
+            self.image_list = np.array(image_liste)
+        return self.image_list
+
+    def getAllImages(self):
+        """
+        Returns all images from the Dataset
+        """
+        if not self.preload:
+            self.preload = True
+            self.loadImages()
+        return self.images
+
+    def getAllTargets(self):
+        """
+        Returns all targets
+        """
+        return self.targets
+
+    def getAllFilenames(self):
+        """
+        Returns all filenames
+        """
+        return self.image_ids
+
+    def getAllIndices(self):
+        return self.data.index
 
 class NIH_K_Fold_Dataloader:
     def __init__(self, dataset, k=10, labelerIds=[4323195249, 4295194124], train_batch_size=8, test_batch_size=8,
