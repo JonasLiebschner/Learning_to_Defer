@@ -14,6 +14,39 @@ class Expert:
         if self.modus == "perfect":
             self.predictions = self.data
 
+    def setTrainTestVal(self, train_filenames, val_filenames, test_filenames):
+        """
+        Sets the train, test and validation data so that the expert can choose which data could be labeld for training
+        """
+        self.train_data = self.data[self.data["Image ID"] in train_filenames]
+        self.test_data = self.data[self.data["Image ID"] in test_filenames]
+        self.val_data = self.data[self.data["Image ID"] in val_filenames]
+
+    def setPredictions(self, ids):
+        """
+        Sets the images with index ids from the train dataset as labeled
+        """
+        self.indices_labeled  = ids
+        self.indices_unlabeled = list(set(ids) - set(indices_labeled))
+
+    def initPredictions(self, n):
+        """
+        Randomly chooses n images for labeling
+        """
+        all_indices = list(range(len(self.train_data["Image ID"])))
+        self.setPredictions(all_indices)
+
+    def setPredictionFunction(self, fn):
+        self.predict = fn
+
+    def predictUnlabeled(self, img, target, fnames):
+        preds = []
+        for i, x in enumerate(fnames):
+            if np.random.uniform(0,1) > self.prob:
+                    preds.append(self.predict(img[i], target[i], x))
+                else:
+                    preds.append(np.random.randint(2, size=1))
+
     def predict(self, img, target, fnames):
         """
         img: the input image
@@ -63,6 +96,7 @@ class NihExpert:
 
         self.image_id_to_prediction = pd.Series(expert_labels[self.target + "_Expert_Label"].values,
                                                 index=expert_labels["Image ID"]).to_dict()
+
 
     def predict(self, image_ids):
         """Returns the experts predictions for the given image ids. Works only for image ids that are labeled by the expert
