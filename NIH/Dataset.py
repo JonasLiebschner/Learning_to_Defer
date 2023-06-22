@@ -44,7 +44,7 @@ class BasicDataset:
 class NIHDataset:
     """
     """
-    def __init__(self, data: pd.DataFrame, transformation=None, preload=False, preprocess=False, param=None):
+    def __init__(self, data: pd.DataFrame, transformation=None, preload=False, preprocess=False, param=None, image_container=None, size=(128, 128)):
         self.data = data
         self.image_ids = data["Image ID"].values
         self.targets = data["GT"].values
@@ -52,8 +52,9 @@ class NIHDataset:
         if transformation == None:
             self.tfms = transforms.Compose(
             [
-              transforms.ToTensor(),
-              transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+                transforms.Resize(128),
+                transforms.ToTensor(),
+                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
             ])
         else:
             self.tfms = transformation
@@ -63,7 +64,8 @@ class NIHDataset:
 
         self.images = []
 
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        #self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.device = None
         
         self.preload = preload
         self.preprocess = preprocess
@@ -72,6 +74,9 @@ class NIHDataset:
         
         self.current = 0
         self.high = len(self.image_ids)
+
+        self.image_container = image_container
+        self.size = size
         
         if self.preload:
             self.loadImages()
@@ -89,7 +94,11 @@ class NIHDataset:
         """
         Load one single image
         """
-        return Image.open(self.PATH + "images/" + self.image_ids[idx]).convert("RGB").resize((244,244))
+        if self.image_container is not None:
+            return self.image_container.get_image_from_name(self.image_ids[idx])
+        else:
+            print("wrong")
+            return Image.open(self.PATH + "images/" + self.image_ids[idx]).convert("RGB").resize(self.size)
             
     def getImage(self, idx):
         """
@@ -98,32 +107,40 @@ class NIHDataset:
         if self.preload:
             return self.images[idx]
         else:
+            print("wrong")
             return self.loadImage(idx)
 
     def loadImages(self):
         """
         Load all images
         """
-        count = 0
-        for idx in range(len(self.image_ids)):
-            #if count % 1000 == 0:
-                #print("Loaded " + str(count) + " images")
-            count += 1
+        if self.image_container is not None:
+            self.preload = True
+            self.images = self.image_container.get_images_from_name(self.image_ids)
             if self.preprocess:
-                self.images.append(self.transformImage(self.loadImage(idx)))
-            else:
-                self.images.append(self.loadImage(idx))
+                print("Preprocessed")
+                #self.images = [self.transformImage(img) for img in self.images]
+        else:
+            for idx in range(len(self.image_ids)):
+                if self.preprocess:
+                    self.images.append(self.transformImage(self.loadImage(idx)))
+                else:
+                    self.images.append(self.loadImage(idx))
         #print("Loading complete")
         
     def transformImage(self, image):
         """
         Transforms the image
         """
-        return self.tfms(image).to(self.device)
+        #print("transformed")
+        if self.device is None:
+            self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        return self.tfms(image)#.to(self.device)
         
     def __getitem__(self, index: int) -> Tuple[Any, Any]:
         filename, target = self.image_ids[index], self.targets[index]
         img = self.getImage(index)
+        
         if not self.preprocess:
             img = self.transformImage(img)
         return img, target, filename
@@ -170,7 +187,7 @@ class NIHDataset:
         """
         Returns all filenames
         """
-        return self.image_ids
+        return self.image_ids.astype(str)
 
     def getAllIndices(self):
         return self.data.index
@@ -190,6 +207,8 @@ class NIH_K_Fold_Dataloader:
         self.preprocess = preprocess
         self.param = param
         self.prebuild = prebuild
+
+        self.num_workers = 4
 
         #TODO: Implement support for non overlapping Labels
 
@@ -232,6 +251,11 @@ class NIH_K_Fold_Dataloader:
         self.labels = self.expert_labels.drop_duplicates(subset=["Image ID"])
         self.labels = self.labels.fillna(0)
         self.labels = self.labels[["Patient ID", "Image ID", "GT"]]
+        
+        self.labels["Image ID"] = self.labels["Image ID"].astype('category')
+        
+
+        self.image_container = ImageContainer(path=self.param["PATH"], img_ids=self.labels["Image ID"], preload=True, transform=None, preprocess=False, img_size=(128, 128))
 
         kf_cv = StratifiedKFold(n_splits=self.k, shuffle=True, random_state=self.seed)
 
@@ -305,13 +329,13 @@ class NIH_K_Fold_Dataloader:
     def create_Dataloader_for_Fold(self, idx):
         expert_train, expert_val, expert_test = self.k_fold_datasets[idx]
 
-        expert_train_dataset = NIHDataset(expert_train, preload=self.preload, preprocess=self.preprocess, param=self.param)
-        expert_val_dataset = NIHDataset(expert_val, preload=self.preload, preprocess=self.preprocess, param=self.param)
-        expert_test_dataset = NIHDataset(expert_test, preload=self.preload, preprocess=self.preprocess, param=self.param)
+        expert_train_dataset = NIHDataset(expert_train, preload=self.preload, preprocess=self.preprocess, param=self.param, image_container=self.image_container)
+        expert_val_dataset = NIHDataset(expert_val, preload=self.preload, preprocess=self.preprocess, param=self.param, image_container=self.image_container)
+        expert_test_dataset = NIHDataset(expert_test, preload=self.preload, preprocess=self.preprocess, param=self.param, image_container=self.image_container)
 
-        train_loader = torch.utils.data.DataLoader(dataset=expert_train_dataset, batch_size=self.train_batch_size, shuffle=True, drop_last=True)
-        val_loader = torch.utils.data.DataLoader(dataset=expert_val_dataset, batch_size=self.test_batch_size, shuffle=True, drop_last=False)
-        test_loader = torch.utils.data.DataLoader(dataset=expert_test_dataset, batch_size=self.test_batch_size, shuffle=True, drop_last=False)
+        train_loader = torch.utils.data.DataLoader(dataset=expert_train_dataset, batch_size=self.train_batch_size, num_workers=self.num_workers, shuffle=True, drop_last=False, pin_memory=True)
+        val_loader = torch.utils.data.DataLoader(dataset=expert_val_dataset, batch_size=self.test_batch_size, num_workers=self.num_workers, shuffle=True, drop_last=False, pin_memory=True)
+        test_loader = torch.utils.data.DataLoader(dataset=expert_test_dataset, batch_size=self.test_batch_size, num_workers=self.num_workers, shuffle=True, drop_last=False, pin_memory=True)
         return train_loader, val_loader, test_loader
 
     def buildDataloaders(self):
@@ -321,6 +345,62 @@ class NIH_K_Fold_Dataloader:
             loader_set = [train_loader, val_loader, test_loader]
             self.loaders.append(loader_set)
             print("Loaded set number " + str(i))
+
+    def getFullDataloader(self):
+        full_dataset = NIHDataset(self.labels[["Image ID", "GT"]], preload=self.preload, preprocess=self.preprocess, param=self.param, image_container=self.image_container)
+        return torch.utils.data.DataLoader(dataset=full_dataset, batch_size=self.train_batch_size, num_workers=self.num_workers, shuffle=True, drop_last=False, pin_memory=True)
+
+    def get_ImageContainer(self):
+        return self.image_container
+
+
+
+class ImageContainer:
+    def __init__(self, path, img_ids, preload=True, transform=None, preprocess=False, img_size=(128, 128)):
+        self.PATH = path
+        self.image_ids = img_ids.values
+        self.preload = preload
+        self.preprocess = preprocess
+        self.img_size = img_size
+        self.images = []
+
+        if self.preload:
+            self.loadImages()
+        
+
+    def loadImages(self):
+        for idx in range(len(self.image_ids)):
+            self.images.append(self.loadImage(idx))
+            
+            if self.preprocess:
+                self.images[idx] = self.transformImage(self.images[idx])
+
+    def loadImage(self, idx):
+        """
+        Load one single image
+        """
+        return Image.open(self.PATH + "images/" + self.image_ids[idx]).convert("RGB").resize(self.img_size)
+            
+    def get_image_from_id(self, idx):
+        """
+        Returns the image from index idx
+        """
+        if self.preload:
+            return self.images[idx]
+        else:
+            return self.loadImage(idx)
+
+    def get_image_from_name(self, fname):
+        if self.preload:
+            return self.images[np.where(self.image_ids == fname)]
+        else:
+            return self.get_image_from_id(np.where(self.image_ids == fname))
+
+    def get_images_from_name(self, fnames):
+        if self.preload:
+            return [self.images[np.where(self.image_ids == fname)[0][0]] for fname in fnames]
+        else:
+            return [self.get_image_from_id(np.where(self.image_ids == fname)[0][0]) for fname in fnames]
     
 def setupLabels(PATH_Labels):
     path_to_test_Labels = PATH_Labels + "test_labels.csv"
