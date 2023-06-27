@@ -20,9 +20,9 @@ from tqdm import tqdm
 from tabulate import tabulate
 
 from sklearn.model_selection import KFold
-from SSL.datasets import transform as T
-from SSL.datasets.randaugment import RandomAugment
-from SSL.datasets.sampler import RandomSampler, BatchSampler
+from datasets import transform as T
+from datasets.randaugment import RandomAugment
+from datasets.sampler import RandomSampler, BatchSampler
 
 class BasicDataset:
     """
@@ -92,10 +92,13 @@ class NIHDataset:
         self.current = 0
         self.high = len(self.image_ids)
 
+        if (image_container is None):
+            print("None image container")
+
         self.image_container = image_container
         self.size = size
         
-        if self.preload:
+        if ((self.preload) or (self.image_container is not None)):
             self.loadImages()
             
     def __iter__(self):
@@ -112,6 +115,7 @@ class NIHDataset:
         Load one single image
         """
         if self.image_container is not None:
+            self.preload = True
             return self.image_container.get_image_from_name(self.image_ids[idx])
         else:
             print("wrong")
@@ -393,6 +397,9 @@ class ImageContainer:
     def loadImages(self):
         for idx in range(len(self.image_ids)):
             self.images.append(self.loadImage(idx))
+
+            if idx % 200 == 0:
+                print("Loaded image number: " + str(idx))
             
             if self.preprocess:
                 self.images[idx] = self.transformImage(self.images[idx])
@@ -588,7 +595,7 @@ class DataManager():
     
     
 class SSLDataset():
-    def __init__(self, dataset, kFoldDataloader, imageContainer, labeler_ids, param, seed):
+    def __init__(self, dataset, kFoldDataloader, imageContainer, labeler_ids, param, seed, prebuild=False):
         self.basicDataset = dataset
         self.kFoldDataloader = kFoldDataloader
         self.imageContainer = imageContainer
@@ -600,14 +607,24 @@ class SSLDataset():
         self.k_fold_datasets = []
         self.k_fold_datasets_labeled = []
         
+        self.prebuild=prebuild
+        self.preload = False
+        self.preprocess = False
+
+        self.num_workers = 4
         
         self.unpack_param()
         self.setup()
+
+        if self.prebuild:
+            self.buildDataloaders()
         
     def unpack_param(self):
         self.k = self.param["K"]
         self.overlap_k = self.param["OVERLAP K"]
         self.n_labels = self.param["NUMBER LABELS"]
+        self.train_batch_size = self.param["TRAIN_BATCH_SIZE"]
+        self.test_batch_size = self.param["TEST_BATCH_SIZE"]
         
     def set_seed(self, seed):
         random.seed(seed)
@@ -714,7 +731,7 @@ class SSLDataset():
             self.k_fold_datasets_labeled.append((used_train, used_val, used_test))
             print("Added")
         
-        self.createLabeledIndices(labelerIds=self.labeler_ids, n_L=n_labels, k=overlap_k, seed=self.seed)
+        self.createLabeledIndices(labelerIds=self.labeler_ids, n_L=self.n_labels, k=self.overlap_k, seed=self.seed)
             
     def sampleIndices(self, n, k, data, experten, seed = None):
         """
@@ -878,7 +895,7 @@ class SSLDataset():
             )
             return dl_x, dl_u
         
-    def get_val_loader_interface(self, expert, batch_size, num_workers, pin_memory=True, imsize=(128, 128)):
+    def get_val_loader_interface(self, expert, batch_size, num_workers, pin_memory=True, imsize=(128, 128), fold_idx=0):
         """Get data loader for the validation set
 
         :param expert: Synthetic cifar expert
@@ -896,7 +913,8 @@ class SSLDataset():
             data=data,
             labels=labels,
             mode='test',
-            imsize=imsize
+            imsize=imsize,
+            image_container=self.imageContainer
         )
         dl = torch.utils.data.DataLoader(
             ds,
@@ -908,7 +926,7 @@ class SSLDataset():
         )
         return dl
     
-    def get_test_loader_interface(self, expert, batch_size, num_workers, pin_memory=True, imsize=(128, 128)):
+    def get_test_loader_interface(self, expert, batch_size, num_workers, pin_memory=True, imsize=(128, 128), fold_idx=0):
         """Get data loader for the validation set
 
         :param expert: Synthetic cifar expert
@@ -926,7 +944,8 @@ class SSLDataset():
             data=data,
             labels=labels,
             mode='test',
-            imsize=imsize
+            imsize=imsize,
+            image_container=self.imageContainer
         )
         dl = torch.utils.data.DataLoader(
             ds,
@@ -937,6 +956,50 @@ class SSLDataset():
             pin_memory=pin_memory
         )
         return dl
+
+    """
+    Functions to get the whole dataset as dataloaders
+    """
+    def get_data_loader_for_fold(self, fold_idx):
+        if self.prebuild:
+            return self.loaders[fold_idx][0], self.loaders[fold_idx][1], self.loaders[fold_idx][2]
+        else:
+            return self.create_Dataloader_for_Fold(fold_idx)
+
+    def get_dataset_for_folder(self, fold_idx):
+        expert_train, expert_val, expert_test = self.k_fold_datasets[fold_idx]
+
+        return expert_train, expert_val, expert_test
+
+    def create_Dataloader_for_Fold(self, idx):
+        expert_train, expert_val, expert_test = self.k_fold_datasets[idx]
+
+        expert_train_dataset = NIHDataset(expert_train, preload=self.preload, preprocess=self.preprocess, param=self.param, image_container=self.imageContainer)
+        expert_val_dataset = NIHDataset(expert_val, preload=self.preload, preprocess=self.preprocess, param=self.param, image_container=self.imageContainer)
+        expert_test_dataset = NIHDataset(expert_test, preload=self.preload, preprocess=self.preprocess, param=self.param, image_container=self.imageContainer)
+
+        train_loader = torch.utils.data.DataLoader(dataset=expert_train_dataset, batch_size=self.train_batch_size, num_workers=self.num_workers, shuffle=True, drop_last=False, pin_memory=True)
+        val_loader = torch.utils.data.DataLoader(dataset=expert_val_dataset, batch_size=self.test_batch_size, num_workers=self.num_workers, shuffle=True, drop_last=False, pin_memory=True)
+        test_loader = torch.utils.data.DataLoader(dataset=expert_test_dataset, batch_size=self.test_batch_size, num_workers=self.num_workers, shuffle=True, drop_last=False, pin_memory=True)
+        return train_loader, val_loader, test_loader
+
+    def buildDataloaders(self):
+        self.loaders = []
+        for i in range(self.k):
+            train_loader, val_loader, test_loader = self.create_Dataloader_for_Fold(i)
+            loader_set = [train_loader, val_loader, test_loader]
+            self.loaders.append(loader_set)
+            print("Loaded set number " + str(i))
+
+    def getFullDataloader(self):
+        full_dataset = NIHDataset(self.labels[["Image ID", "GT"]], preload=self.preload, preprocess=self.preprocess, param=self.param, image_container=self.imageContainer)
+        return torch.utils.data.DataLoader(dataset=full_dataset, batch_size=self.train_batch_size, num_workers=self.num_workers, shuffle=True, drop_last=False, pin_memory=True)
+
+    def get_ImageContainer(self):
+        return self.imageContainer
+    
+    def getData(self):
+        return self.labels[self.labels["Patient ID"].isin(self.patient_performance["Patient ID"])]
     
 class NIH_SSL_Dataset(Dataset):
     """Class representing the NIH dataset
@@ -955,6 +1018,11 @@ class NIH_SSL_Dataset(Dataset):
         self.labels = labels
         self.mode = mode
         self.image_container = image_container
+
+        self.preprocess=False
+        self.preload=True
+
+        self.images = []
         
         self.loadImages()
 
@@ -1006,6 +1074,7 @@ class NIH_SSL_Dataset(Dataset):
         if self.image_container is not None:
             self.images = self.image_container.get_images_from_name(self.image_ids)
         else:
+            print("No image container")
             for idx in range(len(self.image_ids)):
                 if self.preprocess:
                     self.images.append(self.transformImage(self.loadImage(idx)))
