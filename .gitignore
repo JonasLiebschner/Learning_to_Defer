@@ -132,3 +132,5 @@ dmypy.json
 .neptune/
 
 neptune_config.json
+
+SSL_working/
