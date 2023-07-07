@@ -7,7 +7,7 @@ from torch.optim.lr_scheduler import _LRScheduler
 import numpy as np
 
 
-def setup_default_logging(args, default_level=logging.INFO,
+def setup_default_logging(path, args, default_level=logging.INFO,
                           format="%(asctime)s - %(levelname)s - %(name)s -   %(message)s"):
     """Setup default logging
 
@@ -20,13 +20,16 @@ def setup_default_logging(args, default_level=logging.INFO,
     """
     print(args["dataset"])
     if ('CIFAR' in args["dataset"]) or ('NIH' in args["dataset"]):
-        output_dir = os.path.join(args["dataset"], args["exp_dir"], f'ex{args["ex_strength"]}_x{args["n_labeled"]}_seed{args["seed"]}')
+        output_dir = os.path.join(path, args["dataset"], args["exp_dir"], f'ex{args["ex_strength"]}_x{args["n_labeled"]}_seed{args["seed"]}')
     else:
         output_dir = os.path.join(args["dataset"], f'f{args["folds"]}', args["exp_dir"])
         
     os.makedirs(output_dir, exist_ok=True)
 
     logger = logging.getLogger('train')
+
+    if (logger.hasHandlers()):
+        logger.handlers.clear()
 
     logging.basicConfig(  # unlike the root logger, a custom logger can’t be configured using basicConfig()
         filename=os.path.join(output_dir, f'experiment.log'),

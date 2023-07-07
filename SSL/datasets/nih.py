@@ -4,9 +4,9 @@ import os
 
 from torch.utils.data.dataset import Dataset
 from torchvision import transforms
-from datasets import transform as T
-from datasets.randaugment import RandomAugment
-from datasets.sampler import RandomSampler, BatchSampler
+from SSL.datasets import transform as T
+from SSL.datasets.randaugment import RandomAugment
+from SSL.datasets.sampler import RandomSampler, BatchSampler
 from PIL import Image
 import torch
 from collections import Counter

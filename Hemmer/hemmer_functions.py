@@ -287,7 +287,7 @@ def evaluate_one_epoch(epoch, feature_extractor, classifier, allocation_system, 
 
     return system_accuracy, system_loss, system_preds, allocation_system_decisions, targets
 
-def run_team_performance_optimization(method, seed, nih_dataloader, expert_fns, PATH, maxLabels=800, param=None):
+def run_team_performance_optimization(method, seed, nih_dataloader, expert_fns, param=None):
     print(f'Team Performance Optimization with {method}')
     
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
