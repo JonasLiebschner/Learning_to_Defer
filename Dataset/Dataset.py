@@ -2,6 +2,7 @@ import tarfile
 import shutil
 import urllib
 import os
+import copy
 
 import random
 from itertools import chain
@@ -20,9 +21,11 @@ from tqdm import tqdm
 from tabulate import tabulate
 
 from sklearn.model_selection import KFold
-from datasets import transform as T
-from datasets.randaugment import RandomAugment
-from datasets.sampler import RandomSampler, BatchSampler
+from SSL.datasets import transform as T
+from SSL.datasets.randaugment import RandomAugment
+from SSL.datasets.sampler import RandomSampler, BatchSampler
+
+import warnings
 
 
 class BasicDataset:
@@ -581,18 +584,18 @@ class DataManager():
                     dataset = self.basicDataset,
                     k = self.param["K"],
                     labelerIds = self.labeler_ids,
-                    train_batch_size = self.param["TRAIN_BATCH_SIZE"],
-                    test_batch_size = self.param["TEST_BATCH_SIZE"],
+                    train_batch_size = self.param["L2D"]["TRAIN_BATCH_SIZE"],
+                    test_batch_size = self.param["L2D"]["TEST_BATCH_SIZE"],
                     seed = seed,
                     #maxLabels = maxL,
                     preprocess = False,
-                    preload = self.param["PRELOAD"],
-                    prebuild = self.param["PREBUILD"],
+                    preload = self.param["L2D"]["PRELOAD"],
+                    prebuild = self.param["L2D"]["PREBUILD"],
                     param = self.param
                 )
             
-            self.SSLDatasets[seed] = self.SSLDataset = SSLDataset(dataset=self.basicDataset, kFoldDataloader=self.kFoldDataloaders[seed], 
-                                                                 imageContainer=self.fullImageContainer, labeler_ids=self.labeler_ids, param=self.param, seed=seed)
+            self.SSLDatasets[seed] = self.SSLDataset = SSLDataset(dataset=self.basicDataset, kFoldDataloader=self.kFoldDataloaders[seed], imageContainer=self.fullImageContainer, 
+                                                                  labeler_ids=self.labeler_ids, param=self.param, seed=seed, prebuild = self.param["SSL"]["PREBUILD"])
         
          
     def getKFoldDataloader(self, seed):
@@ -600,6 +603,9 @@ class DataManager():
     
     def getSSLDataset(self, seed):
         return self.SSLDatasets[seed]
+
+    def getBasicDataset(self):
+        return self.basicDataset
     
     
 class SSLDataset():
@@ -629,10 +635,10 @@ class SSLDataset():
         
     def unpack_param(self):
         self.k = self.param["K"]
-        self.overlap_k = self.param["OVERLAP K"]
-        self.n_labels = self.param["NUMBER LABELS"]
-        self.train_batch_size = self.param["TRAIN_BATCH_SIZE"]
-        self.test_batch_size = self.param["TEST_BATCH_SIZE"]
+        #self.overlap_k = round(self.param["LABELED"]*self.param["OVERLAP"]/100)
+        #self.n_labels = self.param["LABELED"]
+        self.train_batch_size = self.param["SSL"]["TRAIN_BATCH_SIZE"]
+        self.test_batch_size = self.param["SSL"]["TEST_BATCH_SIZE"]
         
     def set_seed(self, seed):
         random.seed(seed)
@@ -739,9 +745,9 @@ class SSLDataset():
             self.k_fold_datasets_labeled.append((used_train, used_val, used_test))
             print("Added")
         
-        self.createLabeledIndices(labelerIds=self.labeler_ids, n_L=self.n_labels, k=self.overlap_k, seed=self.seed)
+        #self.createLabeledIndices(labelerIds=self.labeler_ids, n_L=self.n_labels, k=self.overlap_k, seed=self.seed)
             
-    def sampleIndices(self, n, k, data, experten, seed = None):
+    def sampleIndices(self, n, k, data, experten, seed = None, sample_equal=False):
         """
         Creates indices for which data are labeled for each expert
         
@@ -755,11 +761,17 @@ class SSLDataset():
         #Set seed
         if seed is not None:
             self.set_seed(seed)
+
+        if k > n:
+            k = n
+            warnings.warn("k was bigger than n")
             
         data = data.reset_index(drop=True)
             
         #Get all indices
         all_indices = indices = [j for j in range(len(data))]
+
+        print(f"Len all indices {len(all_indices)}")
         
         #Get which indices are labeled from which expert
         experts_indices = {}
@@ -768,10 +780,20 @@ class SSLDataset():
             experts_indices[expert] = [j for j in all_indices if (data[str(expert)][j] != -1)]
             common_indices = set(common_indices).intersection(experts_indices[expert])
         common_indices = list(common_indices)
-        common_indices.sort()
+        #common_indices.sort()
+
+        print(f"Len common indices {len(common_indices)}")
 
         #Sample the shared indices
-        same_indices = random.sample(common_indices, k)
+        if sample_equal:
+            indices_0 = [ind for ind in common_indices if data["GT"][ind] == 0]
+            indices_1 = [ind for ind in common_indices if data["GT"][ind] == 1]
+            same_indices = random.sample(indices_0, round(k/2))
+            same_indices += random.sample(indices_1, round(k/2))
+            print(f"Indices with GT=0: {k/2} and with GT=1: {k/2}")
+            pass
+        else:
+            same_indices = random.sample(common_indices, k)
         diff_indices = []
         used_indices = same_indices
         indices = {}
@@ -783,23 +805,44 @@ class SSLDataset():
                 working_indices = experts_indices[expert]
                 temp_indices = []
                 count = 0 # To avoid infinity loop
-                while len(temp_indices) < (n - k):
-                    count += 1
-                    temp = random.sample(working_indices, 1)
-                    if temp not in used_indices:
-                        temp_indices = temp_indices + temp
-                        used_indices = used_indices + temp
-                    if count >= 1000:
-                        temp = random.sample(used_indices, n-k-len(temp_indices))
-                        if isinstance(temp, list):
+                working_indices_gt = {}
+                if sample_equal:
+                    print(f"Indices with GT=0: {n/2} and with GT=1: {n/2}")
+                    working_indices_gt[0] = [ind for ind in working_indices if data["GT"][ind] == 0]
+                    working_indices_gt[1] = [ind for ind in working_indices if data["GT"][ind] == 1]
+                    print(f"Len GT=0 {len(working_indices_gt[0])} and GT=1 {len(working_indices_gt[1])}")
+                    for gt in [0, 1]:
+                        while len(temp_indices) < (n - round(k/2)):
+                            count += 1
+                            temp = random.sample(working_indices_gt[gt], 1)
+                            if temp not in used_indices:
+                                temp_indices = temp_indices + temp
+                                used_indices = used_indices + temp
+                            if count >= 1000:
+                                temp = random.sample(used_indices, n-k-len(temp_indices))
+                                if isinstance(temp, list):
+                                    temp_indices = temp_indices + temp
+                                else:
+                                    temp_indices.append(temp)
+                                break
+                else:
+                    while len(temp_indices) < (n - k):
+                        count += 1
+                        temp = random.sample(working_indices, 1)
+                        if temp not in used_indices:
                             temp_indices = temp_indices + temp
-                        else:
-                            temp_indices.append(temp)
-                        break
+                            used_indices = used_indices + temp
+                        if count >= 1000:
+                            temp = random.sample(used_indices, n-k-len(temp_indices))
+                            if isinstance(temp, list):
+                                temp_indices = temp_indices + temp
+                            else:
+                                temp_indices.append(temp)
+                            break
                 indices[expert] = (same_indices + temp_indices)
         return indices
             
-    def createLabeledIndices(self, labelerIds, n_L, k, seed=0):
+    def createLabeledIndices(self, labelerIds, n_L, k, seed=0, sample_equal=False):
         """
         Creates the labeled indices for all folds for every expert
         
@@ -814,7 +857,7 @@ class SSLDataset():
         self.labeled_indices = []
         for i in range(self.k):
             train_data, _, _ = self.k_fold_datasets[i]            
-            sampled_indices = self.sampleIndices(n=n_L, k=k, data=train_data, experten=labelerIds, seed=seeds[i])
+            sampled_indices = self.sampleIndices(n=n_L, k=k, data=train_data, experten=labelerIds, seed=seeds[i], sample_equal=sample_equal)
             #print(sampled_indices)
             self.labeled_indices.append(sampled_indices)
         
@@ -920,7 +963,7 @@ class SSLDataset():
         ds = NIH_SSL_Dataset(
             data=data,
             labels=labels,
-            mode='test',
+            mode='val',
             imsize=imsize,
             image_container=self.imageContainer
         )
@@ -965,6 +1008,13 @@ class SSLDataset():
         )
         return dl
 
+    
+    def getLabeledFilenames(self, labelerId, fold_idx):
+        train_data, _, _ = self.getDatasetsForExpert(labelerId, fold_idx)
+        X = np.array(train_data["Image ID"])
+        labeled_indices = self.getLabeledIndices(labelerId, fold_idx)
+        return X[labeled_indices].tolist()
+        
     """
     Functions to get the whole dataset as dataloaders
     """
@@ -1080,7 +1130,7 @@ class NIH_SSL_Dataset(Dataset):
         Load all images
         """
         if self.image_container is not None:
-            self.images = self.image_container.get_images_from_name_np(self.image_ids)    
+            self.images = copy.deepcopy(self.image_container.get_images_from_name_np(self.image_ids))
         else:
             print("No image container")
             for idx in range(len(self.image_ids)):

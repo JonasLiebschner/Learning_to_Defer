@@ -37,6 +37,8 @@ class BasicDataset:
             result = result.join(temp.set_index('Image ID'), on='Image ID')
         self.data = result.fillna(-1).reset_index(drop=True)
 
+        print("Number of images of the whole dataset: " + str(len(self.data["Image ID"].values)))
+
     def getExpert(self, id):
         """
         Returns the data for the given expert
@@ -118,7 +120,6 @@ class NIHDataset:
             self.preload = True
             return self.image_container.get_image_from_name(self.image_ids[idx])
         else:
-            print("wrong")
             return Image.open(self.PATH + "images/" + self.image_ids[idx]).convert("RGB").resize(self.size)
             
     def getImage(self, idx):
@@ -430,6 +431,12 @@ class ImageContainer:
             return [self.images[np.where(self.image_ids == fname)[0][0]] for fname in fnames]
         else:
             return [self.get_image_from_id(np.where(self.image_ids == fname)[0][0]) for fname in fnames]
+
+    def get_images_from_name_np(self, fnames):
+        if self.preload:
+            return [np.array(self.images[np.where(self.image_ids == fname)[0][0]]) for fname in fnames]
+        else:
+            return [np.array(self.get_image_from_id(np.where(self.image_ids == fname)[0][0])) for fname in fnames]
     
 def setupLabels(PATH_Labels):
     path_to_test_Labels = PATH_Labels + "test_labels.csv"
@@ -1029,15 +1036,15 @@ class NIH_SSL_Dataset(Dataset):
         mean, std = (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
 
         trans_weak = T.Compose([
-            T.Resize((imsize, imsize)),
-            T.PadandRandomCrop(border=4, cropsize=(imsize, imsize)),
+            T.Resize(imsize),
+            T.PadandRandomCrop(border=4, cropsize=imsize),
             T.RandomHorizontalFlip(p=0.5),
             T.Normalize(mean, std),
             T.ToTensor(),
         ])
         trans_strong0 = T.Compose([
-            T.Resize((imsize, imsize)),
-            T.PadandRandomCrop(border=4, cropsize=(imsize, imsize)),
+            T.Resize(imsize),
+            T.PadandRandomCrop(border=4, cropsize=imsize),
             T.RandomHorizontalFlip(p=0.5),
             RandomAugment(2, 10),
             T.Normalize(mean, std),
@@ -1062,7 +1069,7 @@ class NIH_SSL_Dataset(Dataset):
             self.trans = TwoCropsTransform(trans_weak, trans_strong0)
         else:
             self.trans = T.Compose([
-                T.Resize((imsize, imsize)),
+                T.Resize(imsize),
                 T.Normalize(mean, std),
                 T.ToTensor(),
             ])
@@ -1072,7 +1079,7 @@ class NIH_SSL_Dataset(Dataset):
         Load all images
         """
         if self.image_container is not None:
-            self.images = self.image_container.get_images_from_name(self.image_ids)
+            self.images = self.image_container.get_images_from_name_np(self.image_ids)    
         else:
             print("No image container")
             for idx in range(len(self.image_ids)):

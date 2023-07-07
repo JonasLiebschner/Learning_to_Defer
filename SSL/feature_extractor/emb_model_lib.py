@@ -8,12 +8,14 @@ import torch.nn as nn
 
 from sklearn.metrics import confusion_matrix, accuracy_score
 from torchvision.models.resnet import resnet50, resnet18
+from torchvision.models import resnet50, ResNet50_Weights
+from torchvision.models import resnet18, ResNet18_Weights
 
-import feature_extractor.data_loading as prep
+import SSL.feature_extractor.data_loading as prep
 
-from feature_extractor.wideresnet import WideResNet
-from feature_extractor.utils import get_train_dir, printProgressBar
-from feature_extractor.metrics import get_confusion_matrix
+from SSL.feature_extractor.wideresnet import WideResNet
+from SSL.feature_extractor.utils import get_train_dir, printProgressBar
+from SSL.feature_extractor.metrics import get_confusion_matrix
 
 
 class EmbeddingModel:
@@ -39,11 +41,11 @@ class EmbeddingModel:
     :ivar test_loader: Test dataloader
     :ivar val_loader: Validation dataloader
     """
-    def __init__(self, args, wkdir, writer, dataloaders, param):
+    def __init__(self, args, wkdir, writer, dataloaders, param, neptune_param=None):
         self.global_step = 0
         self.args = args
         self.writer = writer
-        self.device = prep.get_device()
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.train_dir = get_train_dir(wkdir, args, 'emb_net')
         self.model = self.get_model()
         self.optimizer = torch.optim.SGD(self.model.parameters(), lr=args['lr'], weight_decay=5e-4, momentum=0.9,
@@ -55,10 +57,18 @@ class EmbeddingModel:
         self.test_loader = dataloaders[1]
         self.val_loader = dataloaders[2]
 
+        self.train_data = self.train_loader.dataset
+
         
         self.save_model_args()
 
         self.param=param
+        self.neptune_param = neptune_param
+
+        print(str(math.ceil((len(self.train_data.targets) / self.args['batch']))))
+        
+        if neptune_param is not None:
+            NEPTUNE = neptune_param["NEPTUNE"]
 
     def get_model(self):
         """Initialize model
@@ -70,11 +80,14 @@ class EmbeddingModel:
             model = WideResNet(28, 10, 0.2, self.args['num_classes'])
         elif self.args['model'] == 'resnet18':
             model = Resnet(self.args['num_classes'])
+        elif self.args["model"] == "resnet50":
+            model = Resnet(self.args['num_classes'], type="50")
         else:
             model = timm.create_model(self.args['model'], pretrained=True, num_classes=self.args['num_classes'])
         print('Loaded Model', self.args['model'])
         # load model to device
-        model = prep.to_device(model, self.device)
+        #model = prep.to_device(model, self.device)
+        model.to(self.device)
 
         return model
 
@@ -102,10 +115,13 @@ class EmbeddingModel:
             printProgressBar(ii + 1, math.ceil((len(self.train_data.targets) / self.args['batch'])),
                              prefix='Train Epoch ' + str(epoch + 1) + ':',
                              suffix='Complete', length=40)
-            self.writer.add_scalar('Loss/total', loss, self.global_step)
-            self.writer.add_scalar('LR/lr', self.optimizer.param_groups[0]["lr"], self.global_step)
+            if self.writer is not None:
+                self.writer.add_scalar('Loss/total', loss, self.global_step)
+                self.writer.add_scalar('LR/lr', self.optimizer.param_groups[0]["lr"], self.global_step)
+        print("ii " + str(ii))
         return loss
 
+    
     def get_validation_accuracy(self, epoch, return_acc=False, print_acc=True):
         """Get validation accuracy
 
@@ -125,7 +141,7 @@ class EmbeddingModel:
                 output = self.model(data)
 
             # get predicted classes from model output
-            predicted_class = torch.argmax(output, dim=1).cpu().numpy()
+            predicted_class = torch.argmax(output, dim=1).detach().cpu().numpy()
 
             for p in predicted_class:
                 predict.append(p)
@@ -139,9 +155,11 @@ class EmbeddingModel:
                 print('Val-Accuracy:', acc)
             else:
                 print('Epoch:', epoch + 1, '- Val-Accuracy:', acc)
-        self.writer.add_scalar('Acc/valid', acc, self.global_step)
+        if self.writer is not None:
+            self.writer.add_scalar('Acc/valid', acc, self.global_step)
         if return_acc: return acc
 
+    
     def get_test_accuracy(self, return_acc=False, print_acc=True):
         """Get test accuracy
 
@@ -161,7 +179,7 @@ class EmbeddingModel:
 
             # get predicted classes from model output
             m = nn.Softmax(dim=1)
-            predicted_class = torch.argmax(output, dim=1).cpu().numpy()
+            predicted_class = torch.argmax(output, dim=1).detach().cpu().numpy()
             for p in predicted_class:
                 predict.append(p)
             for t in target:
@@ -175,6 +193,7 @@ class EmbeddingModel:
         if print_acc: print('Test-Accuracy:', acc, '\nTest-Acc-Class', cat_acc)
         if return_acc: return acc
 
+    
     def predict_test_data(self):
         """Predict test data
 
@@ -189,7 +208,7 @@ class EmbeddingModel:
                 output = self.model(data)
 
             m = nn.Softmax(dim=1)
-            predicted_class = torch.argmax(m(output), dim=1).cpu().numpy()
+            predicted_class = torch.argmax(m(output), dim=1).detach().cpu().numpy()
             for p in predicted_class:
                 predict.append(int(p))
 
@@ -242,20 +261,23 @@ class EmbeddingModel:
 
 
 class Resnet(torch.nn.Module):
-    def __init__(self, num_classes):
+    def __init__(self, num_classes, type="18"):
         super().__init__()
         self.num_classes = num_classes
-        self.resnet = resnet18(pretrained=True)
-        # del self.resnet.fc
-
+        if type == "18":
+            #self.resnet = resnet18(pretrained=True)
+            self.resnet = resnet18(weights=ResNet18_Weights.DEFAULT)
+            # del self.resnet.fc
+        elif type == "50":
+            self.resnet = resnet50(weights=ResNet50_Weights.DEFAULT)
         try:
-            print('load Resnet-18 checkpoint')
+            print('load Resnet-' + type + ' checkpoint')
             self.load_my_state_dict(
                 torch.load(
                     os.getcwd()[:-len('Embedding-Semi-Supervised')] + "/nih_images/checkpoint.pretrain"),
                 strict=False)
         except FileNotFoundError:
-            print('load Resnet-18 pretrained on ImageNet')
+            print('load Resnet-' + type + ' pretrained on ImageNet')
 
         # for param in self.resnet.parameters():
         #    param.requires_grad = False

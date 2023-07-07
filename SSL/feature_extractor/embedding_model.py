@@ -4,6 +4,8 @@ import torch
 import timm
 import torchvision.transforms as T
 from torchvision.models.resnet import resnet18
+from torchvision.models import resnet50, ResNet50_Weights
+from torchvision.models import resnet18, ResNet18_Weights
 import torch.nn as nn
 
 
@@ -19,16 +21,17 @@ class EmbeddingModel:
     :ivar device: Device
     :ivar emb_model: Embedding model
     """
-    def __init__(self, train_dir, dataset):
+    def __init__(self, train_dir, dataset, embedded_model=None, type="18"):
         self.train_dir = train_dir
         self.dataset = dataset.lower()
         if self.dataset == 'cifar100':
             self.args = {'dataset': self.dataset, 'fe_model': 'efficientnet_b1', 'num_classes': 20, 'batch': 800}
         elif self.dataset == 'nih':
-            self.args = {'dataset': self.dataset, 'fe_model': 'resnet18', 'num_classes': 2, 'batch': 800}
+            self.args = {'dataset': self.dataset, 'fe_model': 'resnet'+type, 'num_classes': 2, 'batch': 800}
         else:
             print(f'Dataset {self.dataset} not implemented')
             sys.exit()
+        self.type = type
         self.device = get_device()
         self.emb_model = self.get_emb_model(os.getcwd())
 
@@ -44,9 +47,11 @@ class EmbeddingModel:
             model = self.load_emb_net_from_checkpoint(model, wkdir)
             model = torch.nn.Sequential(*list(model.children())[:-1])
         elif self.dataset == 'nih':
-            model = Resnet(self.args['num_classes'], self.train_dir)
+            model = Resnet(self.args['num_classes'], self.train_dir, type=self.type)
         print('Loaded Model', self.args['fe_model'])
         model = to_device(model, self.device)
+        #opt_mod = torch.compile(model)
+        #return opt_mod
         return model
 
     def get_embedding(self, batch):
@@ -153,19 +158,23 @@ def get_train_dir(wkdir, args, mode):
 
 
 class Resnet(torch.nn.Module):
-    def __init__(self, num_classes, train_dir):
+    def __init__(self, num_classes, train_dir, type="18"):
         super().__init__()
         self.num_classes = num_classes
-        self.resnet = resnet18(pretrained=True)
+        if type == "18":
+            #self.resnet = resnet18(pretrained=True)
+            self.resnet = resnet18(weights=ResNet18_Weights.DEFAULT)
+        elif type == "50":
+            self.resnet = resnet50(weights=ResNet50_Weights.DEFAULT)
 
         try:
-            print('load Resnet-18 checkpoint')
+            print('load Resnet-' + type + ' checkpoint')
             print(self.load_my_state_dict(
                 torch.load(
-                    train_dir + "/NIH/emb_net@dataset-nih-model-resnet18-num_classes-2/checkpoints/checkpoint.best"),
+                    train_dir + "/NIH/emb_net@dataset-nih-model-resnet" + type + "-num_classes-2/checkpoints/checkpoint.best"),
                 strict=False))
         except KeyError:
-            print('load Resnet-18 pretrained on ImageNet')
+            print('load Resnet-' + type + ' pretrained on ImageNet')
 
         self.resnet.fc = nn.Linear(self.resnet.fc.in_features, num_classes)
 
