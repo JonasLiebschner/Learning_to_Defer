@@ -20,6 +20,9 @@ from torch.utils.data.dataset import random_split
 from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
 
+from torchvision.models import resnet50, ResNet50_Weights
+from torchvision.models import resnet18, ResNet18_Weights
+
 
 class BasicBlock(nn.Module):
     '''
@@ -274,3 +277,47 @@ class Linear_net(nn.Module):
         x = self.softmax(x)
         return x
 
+
+class ResnetPretrained(torch.nn.Module):
+    def __init__(self, num_classes, train_dir, type="18"):
+        super().__init__()
+        self.num_classes = num_classes
+        if type == "18":
+            self.resnet = resnet18(weights=ResNet18_Weights.DEFAULT)
+        elif type == "50":
+            self.resnet = resnet50(weights=ResNet50_Weights.DEFAULT)
+
+        try:
+            print('load Resnet-' + type + ' checkpoint for expert')
+            print(self.load_my_state_dict(
+                torch.load(
+                    train_dir + "/NIH/emb_net@dataset-nih-model-resnet" + type + "-num_classes-2/checkpoints/checkpoint.best"),
+                strict=False))
+        except KeyError:
+            print('load Resnet-' + type + ' pretrained on ImageNet')
+
+        self.resnet.fc = nn.Linear(self.resnet.fc.in_features, num_classes)
+
+
+    def load_my_state_dict(self, state_dict, strict=True):
+        pretrained_dict = {k: v for k, v in state_dict.items() if 'fc' not in k}
+        self.resnet.load_state_dict(pretrained_dict, strict=strict)
+
+    def forward(self, x, return_features=False):
+        x = self.resnet.conv1(x)
+        x = self.resnet.bn1(x)
+        x = self.resnet.relu(x)
+        x = self.resnet.maxpool(x)
+        x = self.resnet.layer1(x)
+        x = self.resnet.layer2(x)
+        x = self.resnet.layer3(x)
+        x = self.resnet.layer4(x)
+        x = self.resnet.avgpool(x)
+        x = torch.flatten(x, 1)
+        features = torch.flatten(x, 1)
+        if return_features:
+            return features
+        else:
+            out = self.resnet.fc(features)
+            out = nn.Softmax(dim=1)(out)
+            return out
