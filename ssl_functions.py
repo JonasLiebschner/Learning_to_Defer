@@ -37,7 +37,7 @@ def set_seed(seed):
         torch.cuda.manual_seed_all(seed)
 
 
-def create_embedded_model(dataloaders, param, neptune_param):
+def create_embedded_model(dataloaders, param, neptune_param, fold, seed):
     args = param["EMBEDDED"]["ARGS"]
     path = param["PATH"]
     neptune_param = neptune_param
@@ -76,8 +76,9 @@ def create_embedded_model(dataloaders, param, neptune_param):
         print(f'loss: {loss}')
 
         if NEPTUNE:
-            run[f'embedded/seed{neptune_param["seed"]}_fold{neptune_param["fold"]}/loss/accuracy'].append(loss)
-            run[f'embedded/seed{neptune_param["seed"]}_fold{neptune_param["fold"]}/val/accuracy'].append(valid_acc)
+            run = param["NEPTUNE"]["RUN"]
+            run[f'Embedded/Seed_{seed}/Fold_{fold}/Val/loss'].append(loss)
+            run[f'Embedded/Seed_{seed}/Fold_{fold}/Val/accuracy'].append(valid_acc)
         # save logs to json
         if SAVE:
             save_to_logs(train_dir, valid_acc, loss.item())
@@ -87,7 +88,8 @@ def create_embedded_model(dataloaders, param, neptune_param):
     acc = emb_model.get_test_accuracy()
 
     if NEPTUNE:
-        run["embedded/test/accuracy"].append(acc)
+        run = param["NEPTUNE"]["RUN"]
+        run[f"Embedded/Seed{seed}/Fold_{fold}/Test/accuracy"].append(acc)
 
     return emb_model
 
@@ -439,11 +441,11 @@ def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded
         dlval = sslDataset.get_test_loader_interface(exp, batch_size=64, num_workers=4, fold_idx=fold_idx)
 
     wd_params, non_wd_params = [], []
-    for name, param in model.named_parameters():
+    for name, params in model.named_parameters():
         if 'bn' in name:
-            non_wd_params.append(param)  
+            non_wd_params.append(params)  
         else:
-            wd_params.append(param)
+            wd_params.append(params)
     param_list = [
         {'params': wd_params}, {'params': non_wd_params, 'weight_decay': 0}]
     optim = torch.optim.SGD(param_list, lr=args["lr"], weight_decay=args["weight_decay"],
@@ -510,6 +512,11 @@ def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded
 
         logger.info("Epoch {}. Acc: {:.4f}. Ema-Acc: {:.4f}. best_acc: {:.4f} in epoch{}".
                     format(epoch, top1, ema_top1, best_acc, best_epoch))
+
+        if param["NEPTUNE"]["NEPTUNE"]:
+            run = param["NEPTUNE"]["RUN"]
+            run[f"SSL/Seed_{seed}/Fold_{fold_idx}/Expert_{labelerId}/Train/" + "Accuracy"].append(top1)
+            run[f"SSL/Seed_{seed}/Fold_{fold_idx}/Expert_{labelerId}/Train/" + "Ema_Accuracy"].append(ema_top1)
         
         save_obj = {
             'model': model.state_dict(),

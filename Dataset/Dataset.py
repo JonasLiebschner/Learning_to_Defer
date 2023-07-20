@@ -4,6 +4,8 @@ import urllib
 import os
 import copy
 
+import hashlib
+
 import random
 from itertools import chain
 from typing import Any, Tuple
@@ -640,7 +642,10 @@ class SSLDataset():
         self.train_batch_size = self.param["SSL"]["TRAIN_BATCH_SIZE"]
         self.test_batch_size = self.param["SSL"]["TEST_BATCH_SIZE"]
         
-    def set_seed(self, seed):
+    def set_seed(self, seed, fold=None, text=None):
+        if fold is not None and text is not None:
+            s = text + f" + {seed} + {fold}"
+            seed = int(hashlib.sha256(s.encode('utf-8')).hexdigest(), 16) % 10**8
         random.seed(seed)
         np.random.seed(seed)
         torch.manual_seed(seed)
@@ -743,11 +748,11 @@ class SSLDataset():
 
             self.k_fold_datasets.append((expert_train, expert_val, expert_test))
             self.k_fold_datasets_labeled.append((used_train, used_val, used_test))
-            print("Added")
+            #print("Added")
         
         #self.createLabeledIndices(labelerIds=self.labeler_ids, n_L=self.n_labels, k=self.overlap_k, seed=self.seed)
             
-    def sampleIndices(self, n, k, data, experten, seed = None, sample_equal=False):
+    def sampleIndices(self, n, k, data, experten, seed = None, sample_equal=False, fold=None):
         """
         Creates indices for which data are labeled for each expert
         
@@ -760,7 +765,7 @@ class SSLDataset():
         """
         #Set seed
         if seed is not None:
-            self.set_seed(seed)
+            self.set_seed(seed, fold, text="")
 
         if k > n:
             k = n
@@ -771,7 +776,7 @@ class SSLDataset():
         #Get all indices
         all_indices = indices = [j for j in range(len(data))]
 
-        print(f"Len all indices {len(all_indices)}")
+        #print(f"Len all indices {len(all_indices)}")
         
         #Get which indices are labeled from which expert
         experts_indices = {}
@@ -782,7 +787,7 @@ class SSLDataset():
         common_indices = list(common_indices)
         #common_indices.sort()
 
-        print(f"Len common indices {len(common_indices)}")
+        #print(f"Len common indices {len(common_indices)}")
 
         #Sample the shared indices
         if sample_equal:
@@ -790,7 +795,7 @@ class SSLDataset():
             indices_1 = [ind for ind in common_indices if data["GT"][ind] == 1]
             same_indices = random.sample(indices_0, round(k/2))
             same_indices += random.sample(indices_1, round(k/2))
-            print(f"Indices with GT=0: {k/2} and with GT=1: {k/2}")
+            #print(f"Indices with GT=0: {k/2} and with GT=1: {k/2}")
             pass
         else:
             same_indices = random.sample(common_indices, k)
@@ -807,10 +812,10 @@ class SSLDataset():
                 count = 0 # To avoid infinity loop
                 working_indices_gt = {}
                 if sample_equal:
-                    print(f"Indices with GT=0: {n/2} and with GT=1: {n/2}")
+                    #print(f"Indices with GT=0: {n/2} and with GT=1: {n/2}")
                     working_indices_gt[0] = [ind for ind in working_indices if data["GT"][ind] == 0]
                     working_indices_gt[1] = [ind for ind in working_indices if data["GT"][ind] == 1]
-                    print(f"Len GT=0 {len(working_indices_gt[0])} and GT=1 {len(working_indices_gt[1])}")
+                    #print(f"Len GT=0 {len(working_indices_gt[0])} and GT=1 {len(working_indices_gt[1])}")
                     for gt in [0, 1]:
                         while len(temp_indices) < (n - round(k/2)):
                             count += 1
@@ -850,14 +855,11 @@ class SSLDataset():
         k - number of shared labeled images
         seed - random seed to init the random function
         """
-        if seed is not None:
-            self.set_seed(seed)
         #Generate random seeds for every loop
-        seeds = [random.randint(0, 10000) for k in range(self.k)]
         self.labeled_indices = []
         for i in range(self.k):
             train_data, _, _ = self.k_fold_datasets[i]            
-            sampled_indices = self.sampleIndices(n=n_L, k=k, data=train_data, experten=labelerIds, seed=seeds[i], sample_equal=sample_equal)
+            sampled_indices = self.sampleIndices(n=n_L, k=k, data=train_data, experten=labelerIds, seed=seed, sample_equal=sample_equal, fold=i)
             #print(sampled_indices)
             self.labeled_indices.append(sampled_indices)
         
@@ -924,7 +926,7 @@ class SSLDataset():
             ds_x,
             batch_sampler=batch_sampler_x,
             num_workers=4,
-            pin_memory=True
+            pin_memory=False
         )
         if data_u is None:
             return dl_x
@@ -942,7 +944,7 @@ class SSLDataset():
                 ds_u,
                 batch_sampler=batch_sampler_u,
                 num_workers=4,
-                pin_memory=True
+                pin_memory=False
             )
             return dl_x, dl_u
         

@@ -7,6 +7,8 @@ import shutil
 import time
 import pandas as pd
 
+import hashlib
+
 import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
@@ -38,7 +40,10 @@ from AL.neural_network import ResnetPretrained
 import Dataset.Dataset as ds
 import expert as ex
 
-def set_seed(seed):
+def set_seed(seed, fold=None, text=None):
+    if fold is not None and text is not None:
+        s = text + f" + {seed} + {fold}"
+        seed = int(hashlib.sha256(s.encode('utf-8')).hexdigest(), 16) % 10**8
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -154,10 +159,10 @@ class NIHExpertDatasetMemory():
     def __len__(self):
         return len(self.targets)
 
-def sampleIndices(n, k, all_indices, experten, seed = None, X=None, sample_equal=False):
+def sampleIndices(n, k, all_indices, experten, seed = None, X=None, sample_equal=False, fold=None):
     
     if seed is not None:
-        set_seed(seed)
+        set_seed(seed, fold, text="")
     
     if X is not None and sample_equal:
         all_indices_0 = [indice for indice in all_indices if X["GT"][indice] == 0]
@@ -290,8 +295,8 @@ def getQbQPoints(expert_models, data_loader, budget, mod=None, param=None):
                     assert isinstance(expert_model, nn.Module), "expert_model is not type nn.Module"
                     outputs_exp = expert_model(images)
                 elif mod == "ssl":
-                    assert isinstance(expert_model, ex.Expert), "expert is not type Expert"
-                    expert = expert_model # only for better readability
+                    assert isinstance(expert_models[expert_model], ex.Expert), "expert is not type Expert"
+                    expert = expert_models[expert_model] # only for better readability
                     features = expert.sslModel.embedded_model.get_embedding(batch=images)
                     logits, _ = expert.sslModel.linear_model(features)
                     scores = torch.softmax(logits, dim=1)
@@ -418,7 +423,7 @@ def getExpertModels(indices, experts, train_dataset, val_dataset, test_dataset, 
     
     metrics = {}
     
-    set_seed(seed)
+    set_seed(seed, fold, text="")
 
     param_al = param["AL"]
 
@@ -428,10 +433,7 @@ def getExpertModels(indices, experts, train_dataset, val_dataset, test_dataset, 
     # Expertenmodell variabel
     
     expert_models = {}
-    #for i, expert in enumerate(experts):
     for labelerId, expert in experts.items():
-
-        print("Starting with expert " + str(labelerId))
 
         Intial_random_set = indices[labelerId]
         indices_labeled  = Intial_random_set
@@ -452,20 +454,23 @@ def getExpertModels(indices, experts, train_dataset, val_dataset, test_dataset, 
         dataloaders = (dataLoaderTrainLabeled, dataLoaderValUnlabeled)
         train_metrics, val_metrics = run_expert(expert_models[labelerId], param_al["EPOCH_TRAIN"], dataloaders, param=param, id=expert.labelerId, seed=seed, fold=fold, 
                    n_images=param_al["INITIAL_SIZE"], mod=learning_mod, prediction_type=prediction_type)
+        
         metrics[labelerId] = {}
-        metrics[labelerId][param_al["INITIAL_SIZE"]] = {}
-        metrics[labelerId][param_al["INITIAL_SIZE"]]["train_metrics"] = train_metrics
-        metrics[labelerId][param_al["INITIAL_SIZE"]]["val_metrics"] = val_metrics
+        metrics[labelerId]["Train"] = {}
+        metrics[labelerId]["Train"][param_al["INITIAL_SIZE"]] = {
+            "train_metrics": train_metrics,
+            "val_metrics": val_metrics,
+        }
 
         met = testExpert(expert, val_dataset, image_container, param, learning_mod, prediction_type, seed, fold, data_name="Val", model=expert_models[labelerId])
-        metrics[labelerId]["Val"] = {}
-        metrics[labelerId]["Val"]["Start"] = met
+        metrics[labelerId]["Val"] = {
+            "Start": met,
+        }
 
         met = testExpert(expert, test_dataset, image_container, param, learning_mod, prediction_type, seed, fold, data_name="Test", model=expert_models[labelerId])
-        metrics[labelerId]["Test"] = {}
-        metrics[labelerId]["Test"]["Start"] = met
-
-    print("Experts trained")
+        metrics[labelerId]["Test"] = {
+            "Start": met,
+        }
 
     #Returns all indices without any used label
     indices_unlabeled = getIndicesWithoutLabel(all_indices = all_indices, labeled_indices = indices)
@@ -475,14 +480,9 @@ def getExpertModels(indices, experts, train_dataset, val_dataset, test_dataset, 
                                                      indices_unlabeled, param=param, preload=param_al["PRELOAD"], image_container=image_container)
     dataLoaderTrainUnlabeled = DataLoader(dataset=dataset_train_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=4, pin_memory=True)
     
-    print("Starting with AL")
     for round in range(param_al["ROUNDS"]):
 
         print(f'\n \n Round {round} \n \n')
-
-        # get points where expert model is least confident on
-        #indices_confidence =  random.sample(indices_unlabeled, LABELS_PER_ROUND)
-        #indices_confidence = get_least_confident_points(model_expert, dataLoaderTrainUnlabeled, param["LABELS_PER_ROUND"])
 
         #Try to get better Points
         if mod == "disagreement":
@@ -510,9 +510,10 @@ def getExpertModels(indices, experts, train_dataset, val_dataset, test_dataset, 
             n_images = param_al["INITIAL_SIZE"] + (round+1)*param_al["LABELS_PER_ROUND"]
             train_metrics, val_metrics = run_expert(expert_models[labelerId], param_al["EPOCH_TRAIN"], dataloaders, param=param, id=expert.labelerId, seed=seed, fold=fold, 
                                                     n_images=n_images, mod=learning_mod, prediction_type=prediction_type)
-            metrics[labelerId][n_images] = {}
-            metrics[labelerId][n_images]["train_metrics"] = train_metrics
-            metrics[labelerId][n_images]["val_metrics"] = val_metrics
+            metrics[labelerId]["Train"][n_images] = {
+                "train_metrics": train_metrics,
+                "val_metrics": val_metrics,
+            }
 
         
         dataset_train_unlabeled = NIHExpertDatasetMemory(None, all_data_filenames[indices_unlabeled], all_data_y[indices_unlabeled], None , [0]*len(indices_unlabeled), 
@@ -526,18 +527,15 @@ def getExpertModels(indices, experts, train_dataset, val_dataset, test_dataset, 
     met_test = {}
     for labelerId, expert in experts.items():
         temp = metrics_print_expert(expert_models[labelerId], dataLoaderVal, id=expert.labelerId, seed=seed, fold=fold, 
-                                    n_images=param_al["INITIAL_SIZE"] + (param_al["ROUNDS"] + 5)*param_al["LABELS_PER_ROUND"], step="Test", mod=learning_mod, prediction_type=prediction_type, param=param)
+                                    n_images=param_al["INITIAL_SIZE"] + param_al["ROUNDS"]*param_al["LABELS_PER_ROUND"], step="Test", mod=learning_mod, prediction_type=prediction_type, param=param)
         met_test[expert.labelerId] = temp
 
         met = testExpert(expert, val_dataset, image_container, param, learning_mod, prediction_type, seed, fold, data_name="Val", model=expert_models[labelerId])
-        metrics[labelerId]["Val"] = {}
         metrics[labelerId]["Val"]["End"] = met
 
         met = testExpert(expert, test_dataset, image_container, param, learning_mod, prediction_type, seed, fold, data_name="Test", model=expert_models[labelerId])
-        metrics[labelerId]["Test"] = {}
         metrics[labelerId]["Test"]["End"] = met
-        #metrics[labelerId]["Test"] = temp
-    print("AL finished")
+
     return expert_models, met_test, metrics
 
 def getExpertModel(indices, train_dataset, val_dataset, test_dataset, expert, param=None, seed=None, fold=None, image_container=None, learning_mod="al", prediction_type="right"):
@@ -549,15 +547,13 @@ def getExpertModel(indices, train_dataset, val_dataset, test_dataset, expert, pa
     all_data_filenames = np.array(train_dataset.getAllFilenames())[all_indices]
     all_data_y = np.array(train_dataset.getAllTargets())[all_indices]
 
-    set_seed(seed)
+    set_seed(seed, fold, text="")
 
     metrics = {}
     
     Intial_random_set = indices
     indices_labeled  = Intial_random_set
     indices_unlabeled= list(set(all_indices) - set(indices_labeled))
-
-    gc.collect()
 
     # Lädt die Datasets für die beschrifteten und unbeschrifteten Daten
     dataset_train_labeled = NIHExpertDatasetMemory(None, all_data_filenames[indices_labeled], all_data_y[indices_labeled], expert.predict , [1]*len(indices_labeled), indices_labeled, 
@@ -572,7 +568,6 @@ def getExpertModel(indices, train_dataset, val_dataset, test_dataset, expert, pa
     dataLoaderTrainUnlabeled = DataLoader(dataset=dataset_train_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=4, pin_memory=True)    
     dataLoaderValUnlabeled = DataLoader(dataset=dataset_val_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=4, pin_memory=True)
     
-    gc.collect()
     # train expert model on labeled data
     #model_expert = NetSimple(2, 3, 100, 100, 1000,500).to(device)
     model_expert = ResnetPretrained(2, "./SSL_Working", type="50").to(device)
@@ -580,24 +575,24 @@ def getExpertModel(indices, train_dataset, val_dataset, test_dataset, expert, pa
 
     dataloaders = (dataLoaderTrainLabeled, dataLoaderValUnlabeled)
     train_metrics, val_metrics = run_expert(model_expert, param_al["EPOCH_TRAIN"], dataloaders, param=param, id=expert.labelerId, seed=seed, fold=fold, 
-                                            n_images=param_al["INITIAL_SIZE"], mod=learning_mod, prediction_type=prediction_type) 
-    metrics[param_al["INITIAL_SIZE"]] = {}
-    metrics[param_al["INITIAL_SIZE"]]["train_metrics"] = train_metrics
-    metrics[param_al["INITIAL_SIZE"]]["val_metrics"] = val_metrics
+                                            n_images=param_al["INITIAL_SIZE"], mod=learning_mod, prediction_type=prediction_type)
+
+    metrics["Train"] = {}
+    metrics["Train"][param_al["INITIAL_SIZE"]] = {
+        "train_metrics": train_metrics,
+        "val_metrics": val_metrics,
+    }
 
     met = testExpert(expert, val_dataset, image_container, param, learning_mod, prediction_type, seed, fold, data_name="Val", model=model_expert)
-    metrics["Val"] = {}
-    metrics["Val"]["Start"] = met
+    metrics["Val"] = {
+        "Start": met,
+    }
 
     met = testExpert(expert, test_dataset, image_container, param, learning_mod, prediction_type, seed, fold, data_name="Test", model=model_expert)
-    metrics["Test"] = {}
-    metrics["Test"]["Start"] = met
-        
-    gc.collect()
+    metrics["Test"] = {
+        "Start": met,
+    }
 
-    #Trainiere Rejector nur noch, wenn notwendig
-    
-    print("Starting with AL")
     for round in range(param_al["ROUNDS"]):
 
         print(f'\n \n Round {round} \n \n')
@@ -623,26 +618,24 @@ def getExpertModel(indices, train_dataset, val_dataset, test_dataset, expert, pa
         train_metrics, val_metrics = run_expert(model_expert, param_al["EPOCH_TRAIN"], dataloaders, param=param, id=expert.labelerId, seed=seed, fold=fold, n_images = n_images, 
                                                 mod=learning_mod, prediction_type=prediction_type)
 
-        metrics[n_images] = {}
-        metrics[n_images]["train_metrics"] = train_metrics
-        metrics[n_images]["val_metrics"] = val_metrics
+        metrics["Train"][n_images] = {
+            "train_metrics": train_metrics,
+            "val_metrics": val_metrics,
+        }
 
 
     dataset_test_unlabeled = NIHExpertDatasetMemory(None, test_dataset.getAllFilenames(), np.array(test_dataset.getAllTargets()), expert.predict , [1]*len(test_dataset.getAllIndices()), 
                                                     test_dataset.getAllIndices(), param=param, preload=param_al["PRELOAD"], image_container=image_container)
     dataLoaderVal = DataLoader(dataset=dataset_test_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=4, pin_memory=True)
     met_test = metrics_print_expert(model_expert, dataLoaderVal, id=expert.labelerId, seed=seed, fold=fold, 
-                               n_images=param_al["INITIAL_SIZE"] + (param_al["ROUNDS"] + 5)*param_al["LABELS_PER_ROUND"], step="Test", mod=learning_mod, prediction_type=prediction_type, param=param)
+                               n_images=param_al["INITIAL_SIZE"] + param_al["ROUNDS"]*param_al["LABELS_PER_ROUND"], step="Test", mod=learning_mod, prediction_type=prediction_type, param=param)
 
     met = testExpert(expert, val_dataset, image_container, param, learning_mod, prediction_type, seed, fold, data_name="Val", model=model_expert)
-    metrics["Val"] = {}
     metrics["Val"]["End"] = met
 
     met = testExpert(expert, test_dataset, image_container, param, learning_mod, prediction_type, seed, fold, data_name="Test", model=model_expert)
-    metrics["Test"] = {}
     metrics["Test"]["End"] = met
-    #metrics["Test"] = met
-    print("AL finished")
+
     return model_expert, met_test, metrics
 
 def getExpertModelNormal(indices, train_dataset, val_dataset, test_dataset, expert, param=None, seed=None, fold=None, image_container=None, learning_mod="al", prediction_type="right"):
@@ -654,7 +647,7 @@ def getExpertModelNormal(indices, train_dataset, val_dataset, test_dataset, expe
     all_data_filenames = np.array(train_dataset.getAllFilenames())[all_indices]
     all_data_y = np.array(train_dataset.getAllTargets())[all_indices]
 
-    set_seed(seed)
+    set_seed(seed, fold, text="")
 
     metrics = {}
     
@@ -680,9 +673,11 @@ def getExpertModelNormal(indices, train_dataset, val_dataset, test_dataset, expe
     dataloaders = (dataLoaderTrainLabeled, dataLoaderValUnlabeled)
     train_metrics, val_metrics = run_expert(model_expert, param_al["EPOCH_TRAIN"], dataloaders, param=param, id=expert.labelerId, seed=seed, fold=fold, 
                                             n_images=param["LABELED"], mod=learning_mod, prediction_type=prediction_type) 
-    metrics[param["LABELED"]] = {}
-    metrics[param["LABELED"]]["train_metrics"] = train_metrics
-    metrics[param["LABELED"]]["val_metrics"] = val_metrics
+    metrics["Train"] = {}
+    metrics["Train"][param["LABELED"]] = {
+        "train_metrics": train_metrics,
+        "val_metrics": val_metrics
+    }
         
     gc.collect()
 
@@ -693,12 +688,14 @@ def getExpertModelNormal(indices, train_dataset, val_dataset, test_dataset, expe
                                n_images=param["LABELED"], step="Test", mod=learning_mod, prediction_type=prediction_type, param=param)
 
     met = testExpert(expert, val_dataset, image_container, param, learning_mod, prediction_type, seed, fold, data_name="Val", model=model_expert)
-    metrics["Val"] = {}
-    metrics["Val"]["End"] = met
+    metrics["Val"] = {
+        "End": met,
+    }
 
     met = testExpert(expert, test_dataset, image_container, param, learning_mod, prediction_type, seed, fold, data_name="Test", model=model_expert)
-    metrics["Test"] = {}
-    metrics["Test"]["End"] = met
+    metrics["Test"] = {
+        "End": met,
+    }
 
     return model_expert, met_test, metrics
 
@@ -789,10 +786,16 @@ def run_expert(model, epochs, dataloaders, apply_softmax = False, param=None, id
     # define loss function (criterion) and optimizer
     #optimizer = torch.optim.AdamW(model.parameters(), lr=0.001, betas=(0.9, 0.999), eps=1e-08, weight_decay=0.01, amsgrad=False)
 
-    print("Run Expert")
     train_loader, val_loader = dataloaders
 
-    optimizer = torch.optim.SGD(model.parameters(), 0.001, #0.001
+    assert mod == "al" or mod == "ssl", "Mod should be al or ssl"
+
+    if mod == "ssl":
+        optimizer = torch.optim.SGD(expert.sslModel.linear_model.parameters(), 0.001, #0.001
+                                momentum=0.9, nesterov=True,
+                                weight_decay=5e-4)
+    elif mod == "al":
+        optimizer = torch.optim.SGD(model.parameters(), 0.001, #0.001
                                 momentum=0.9, nesterov=True,
                                 weight_decay=5e-4)
     # cosine learning rate
@@ -954,6 +957,7 @@ def testExpert(expert, dataset, image_container, param, mod, prediction_type, se
     if param["NEPTUNE"]["NEPTUNE"]:
         output = data_name + "_Start_End"
         run = param["NEPTUNE"]["RUN"]
+        id=expert.labelerId
         run[f"Seed_{seed}/Fold_{fold}/Expert_{id}/" + output + "/tn"].append(metrics["tn"])
         run[f"Seed_{seed}/Fold_{fold}/Expert_{id}/" + output + "/fp"].append(metrics["fp"])
         run[f"Seed_{seed}/Fold_{fold}/Expert_{id}/" + output + "/fn"].append(metrics["fn"])

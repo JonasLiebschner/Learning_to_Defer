@@ -60,6 +60,8 @@ def train(model, train_loader, valid_loader, test_loader, expert_fns, config, se
 
     metrics_train_all = {}
     metrics_val_all = {}
+    metrics_test_all = {}
+    metrics_full_all = {}
 
     for epoch in range(0, config["epochs"]):
         iters, train_loss = train_epoch(
@@ -94,29 +96,58 @@ def train(model, train_loader, valid_loader, test_loader, expert_fns, config, se
             run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Train/alone_classifier"].append(metrics_train["alone_classifier"])
             run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Train/validation_loss"].append(metrics_train["validation_loss"])
             run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Train/cov_classifier"].append(metrics_train["cov_classifier"])
-            for index in range(len(metrics_train["cov_expert"])):
-                run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Train/accuracy_expert_{labelerIds[index]}"].append(metrics_train["acc_expert"][index])
-                run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Train/cov_expert_{labelerIds[index]}"].append(metrics_train["cov_expert"][index])
+            for index in range(len(metrics_train["cov_experts"])):
+                run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Train/accuracy_expert_{labelerIds[index]}"].append(metrics_train["acc_experts"][index])
+                run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Train/cov_expert_{labelerIds[index]}"].append(metrics_train["cov_experts"][index])
         
-        metrics = evaluate(model, experts_fns_eval, loss_fn, n_classes, valid_loader, config)
+        metrics_val = evaluate(model, experts_fns_eval, loss_fn, n_classes, valid_loader, config)
 
         if NEPTUNE:
-            run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Val/system_accuracy"].append(metrics["system_accuracy"])
-            run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Val/expert_accuracy"].append(metrics["expert_accuracy"])
-            run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Val/classifier_accuracy"].append(metrics["classifier_accuracy"])
-            run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Val/alone_classifier"].append(metrics["alone_classifier"])
-            run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Val/validation_loss"].append(metrics["validation_loss"])
-            run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Val/cov_classifier"].append(metrics["cov_classifier"])
-            for index in range(len(metrics_train["cov_expert"])):
-                run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Val/accuracy_expert_{labelerIds[index]}"].append(metrics_train["acc_expert"][index])
-                run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Val/cov_expert_{labelerIds[index]}"].append(metrics_train["cov_expert"][index])
+            run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Val/system_accuracy"].append(metrics_val["system_accuracy"])
+            run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Val/expert_accuracy"].append(metrics_val["expert_accuracy"])
+            run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Val/classifier_accuracy"].append(metrics_val["classifier_accuracy"])
+            run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Val/alone_classifier"].append(metrics_val["alone_classifier"])
+            run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Val/validation_loss"].append(metrics_val["validation_loss"])
+            run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Val/cov_classifier"].append(metrics_val["cov_classifier"])
+            for index in range(len(metrics_train["cov_experts"])):
+                run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Val/accuracy_expert_{labelerIds[index]}"].append(metrics_val["acc_experts"][index])
+                run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Val/cov_expert_{labelerIds[index]}"].append(metrics_val["cov_experts"][index])
 
-        metrics_train_all[epoch] = {}
-        metrics_val_all[epoch] = {}
-        metrics_train_all[epoch]["train"] = metrics_train
-        metrics_val_all[epoch]["val"] = metrics
+        metrics_test = evaluate(model, experts_fns_eval, loss_fn, n_classes, test_loader, config, print_m=False)
+        if param["NEPTUNE"]["NEPTUNE"]:
+            run = param["NEPTUNE"]["RUN"]
+            run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Test/system_accuracy"].append(metrics_test["system_accuracy"])
+            run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Test/expert_accuracy"].append(metrics_test["expert_accuracy"])
+            run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Test/classifier_accuracy"].append(metrics_test["classifier_accuracy"])
+            run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Test/alone_classifier"].append(metrics_test["alone_classifier"])
+            run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Test/validation_loss"].append(metrics_test["validation_loss"])
+            run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Test/cov_classifier"].append(metrics_test["cov_classifier"])
+            for index in range(len(metrics_train["cov_experts"])):
+                run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Test/accuracy_expert_{labelerIds[index]}"].append(metrics_test["acc_experts"][index])
+                run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Test/cov_expert_{labelerIds[index]}"].append(metrics_test["cov_experts"][index])
 
-        validation_loss = metrics["validation_loss"]
+        metrics_full = None
+        if full_dataloader is not None:
+            metrics_full = evaluate(model, experts_fns_eval, loss_fn, n_classes, full_dataloader, config, print_m=False)
+            if param["NEPTUNE"]["NEPTUNE"]:
+                run = param["NEPTUNE"]["RUN"]
+                run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Full/system_accuracy_all"].append(metrics_full["system_accuracy"])
+                run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Full/expert_accuracy_all"].append(metrics_full["expert_accuracy"])
+                run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Full/classifier_accuracy_all"].append(metrics_full["classifier_accuracy"])
+                run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Full/alone_classifier_all"].append(metrics_full["alone_classifier"])
+                run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Full/validation_loss_all"].append(metrics_full["validation_loss"])
+                run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Full/cov_classifier_all"].append(metrics_full["cov_classifier"])
+                for index in range(len(metrics_train["cov_experts"])):
+                    run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Full/accuracy_expert_{labelerIds[index]}"].append(metrics_full["acc_experts"][index])
+                    run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Full/cov_expert_{labelerIds[index]}"].append(metrics_full["cov_experts"][index])
+
+       
+        metrics_train_all[epoch] = metrics_train
+        metrics_val_all[epoch] = metrics_val
+        metrics_test_all[epoch] = metrics_test
+        metrics_full_all[epoch] = metrics_full
+
+        validation_loss = metrics_val["validation_loss"]
 
         if validation_loss < best_validation_loss:
             best_validation_loss = validation_loss
@@ -142,6 +173,9 @@ def train(model, train_loader, valid_loader, test_loader, expert_fns, config, se
             #    json.dump(config, f)
             patience = 0
         else:
+            print("Losses")
+            print(best_validation_loss)
+            print(validation_loss)
             patience += 1
 
         if patience >= config["patience"]:
@@ -152,15 +186,15 @@ def train(model, train_loader, valid_loader, test_loader, expert_fns, config, se
     metrics_test = evaluate(model, experts_fns_eval, loss_fn, n_classes, test_loader, config)
     if param["NEPTUNE"]["NEPTUNE"]:
         run = param["NEPTUNE"]["RUN"]
-        run[f"Seed_{seed}/Folde_{fold}/L2D/Verma/Test/system_accuracy"].append(metrics_test["system_accuracy"])
-        run[f"Seed_{seed}/Folde_{fold}/L2D/Verma/Test/expert_accuracy"].append(metrics_test["expert_accuracy"])
-        run[f"Seed_{seed}/Folde_{fold}/L2D/Verma/Test/classifier_accuracy"].append(metrics_test["classifier_accuracy"])
-        run[f"Seed_{seed}/Folde_{fold}/L2D/Verma/Test/alone_classifier"].append(metrics_test["alone_classifier"])
-        run[f"Seed_{seed}/Folde_{fold}/L2D/Verma/Test/validation_loss"].append(metrics_test["validation_loss"])
-        run[f"Seed_{seed}/Folde_{fold}/L2D/Verma/Test/cov_classifier"].append(metrics_test["cov_classifier"])
-        for index in range(len(metrics_train["cov_expert"])):
-                run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Test/accuracy_expert_{labelerIds[index]}"].append(metrics_train["acc_expert"][index])
-                run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Test/cov_expert_{labelerIds[index]}"].append(metrics_train["cov_expert"][index])
+        run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Test/system_accuracy"].append(metrics_test["system_accuracy"])
+        run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Test/expert_accuracy"].append(metrics_test["expert_accuracy"])
+        run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Test/classifier_accuracy"].append(metrics_test["classifier_accuracy"])
+        run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Test/alone_classifier"].append(metrics_test["alone_classifier"])
+        run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Test/validation_loss"].append(metrics_test["validation_loss"])
+        run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Test/cov_classifier"].append(metrics_test["cov_classifier"])
+        for index in range(len(metrics_train["cov_experts"])):
+                run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Test/accuracy_expert_{labelerIds[index]}"].append(metrics_train["acc_experts"][index])
+                run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Test/cov_expert_{labelerIds[index]}"].append(metrics_train["cov_experts"][index])
 
     metrics_full = None
     if full_dataloader is not None:
@@ -168,17 +202,17 @@ def train(model, train_loader, valid_loader, test_loader, expert_fns, config, se
         metrics_full = evaluate(model, experts_fns_eval, loss_fn, n_classes, full_dataloader, config)
         if param["NEPTUNE"]["NEPTUNE"]:
             run = param["NEPTUNE"]["RUN"]
-            run[f"Seed_{seed}/Folde_{fold}/L2D/Verma/Full/system_accuracy_all"].append(metrics_full["system_accuracy"])
-            run[f"Seed_{seed}/Folde_{fold}/L2D/Verma/Full/expert_accuracy_all"].append(metrics_full["expert_accuracy"])
-            run[f"Seed_{seed}/Folde_{fold}/L2D/Verma/Full/classifier_accuracy_all"].append(metrics_full["classifier_accuracy"])
-            run[f"Seed_{seed}/Folde_{fold}/L2D/Verma/Full/alone_classifier_all"].append(metrics_full["alone_classifier"])
-            run[f"Seed_{seed}/Folde_{fold}/L2D/Verma/Full/validation_loss_all"].append(metrics_full["validation_loss"])
-            run[f"Seed_{seed}/Folde_{fold}/L2D/Verma/Full/cov_classifier_all"].append(metrics_full["cov_classifier"])
-            for index in range(len(metrics_train["cov_expert"])):
-                run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Full/accuracy_expert_{labelerIds[index]}"].append(metrics_train["acc_expert"][index])
-                run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Full/cov_expert_{labelerIds[index]}"].append(metrics_train["cov_expert"][index])
+            run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Full/system_accuracy_all"].append(metrics_full["system_accuracy"])
+            run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Full/expert_accuracy_all"].append(metrics_full["expert_accuracy"])
+            run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Full/classifier_accuracy_all"].append(metrics_full["classifier_accuracy"])
+            run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Full/alone_classifier_all"].append(metrics_full["alone_classifier"])
+            run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Full/validation_loss_all"].append(metrics_full["validation_loss"])
+            run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Full/cov_classifier_all"].append(metrics_full["cov_classifier"])
+            for index in range(len(metrics_train["cov_experts"])):
+                run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Full/accuracy_expert_{labelerIds[index]}"].append(metrics_train["acc_experts"][index])
+                run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Full/cov_expert_{labelerIds[index]}"].append(metrics_train["cov_experts"][index])
         
-    return metrics_train_all, metrics_val_all, metrics_test, metrics_full
+    return metrics_train_all, metrics_val_all, metrics_test_all, metrics_full_all
 
 def train_epoch(
     iters,

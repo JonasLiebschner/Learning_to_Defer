@@ -48,7 +48,7 @@ def L2D_Hemmer(train_loader, val_loader, test_loader, full_dataloader, expert_fn
 
     data_loaders = (train_loader, val_loader, test_loader, full_dataloader)
 
-    system_accuracy, classifier_coverage, all_train_metrics, all_val_metrics, all_test_metrics = run_team_performance_optimization("Our Approach", seed, data_loaders, expert_fns, param=param, fold=fold_idx, experts=experts)
+    system_accuracy, classifier_coverage, all_train_metrics, all_val_metrics, all_test_metrics, all_full_metrics = run_team_performance_optimization("Our Approach", seed, data_loaders, expert_fns, param=param, fold=fold_idx, experts=experts)
     
     #jsf_accuracy, jsf_coverage = run_team_performance_optimization("Joint Sparse Framework", seed, data_loaders, expert_fns, param=param, fold=fold_idx)
 
@@ -61,7 +61,7 @@ def L2D_Hemmer(train_loader, val_loader, test_loader, full_dataloader, expert_fn
 
     print("-"*40)
 
-    return system_accuracy, classifier_coverage, all_train_metrics, all_val_metrics, all_test_metrics
+    return system_accuracy, classifier_coverage, all_train_metrics, all_val_metrics, all_test_metrics, all_full_metrics
 
 
 def run_team_performance_optimization(method, seed, data_loaders, expert_fns, param=None, fold=None, experts=None):
@@ -105,22 +105,34 @@ def run_team_performance_optimization(method, seed, data_loaders, expert_fns, pa
     all_train_metrics = {}
     all_val_metrics = {}
     all_test_metrics = {}
+    all_full_metrics = {}
+
+    experts_fns_eval = []
+    for labelerId, expert in experts.items():
+        experts_fns_eval.append(expert.predict)
 
     for epoch in tqdm(range(1, param["L2D"]["HEMMER"]["EPOCHS"] + 1)):
         train_one_epoch(epoch, feature_extractor, classifier, allocation_system, train_loader, optimizer, scheduler, expert_fns, loss_fn, param)
 
         train_system_accuracy, train_system_loss, train_system_preds, train_allocation_system_decisions, train_targets, train_metrics = evaluate_one_epoch(epoch, feature_extractor, 
                                                                                                                                                            classifier, allocation_system, 
-                                                                                                                                                           train_loader, expert_fns, 
+                                                                                                                                                           train_loader, 
+                                                                                                                                                           experts_fns_eval, 
                                                                                                                                                            loss_fn, param=param)
 
         val_system_accuracy, val_system_loss, val_system_preds, val_allocation_system_decisions, val_targets, val_metrics = evaluate_one_epoch(epoch, feature_extractor, classifier, 
                                                                                                                                                allocation_system, val_loader, 
-                                                                                                                                               expert_fns, loss_fn, param=param)
+                                                                                                                                               experts_fns_eval, loss_fn, param=param)
         test_system_accuracy, test_system_loss, test_system_preds, test_allocation_system_decisions, test_targets, test_metrics = evaluate_one_epoch(epoch, feature_extractor, 
                                                                                                                                                      classifier, allocation_system, 
                                                                                                                                                      test_loader, 
-                                                                                                                                                     expert_fns, loss_fn, param=param)
+                                                                                                                                                     experts_fns_eval, loss_fn, 
+                                                                                                                                                     param=param)
+        full_system_accuracy, full_system_loss, full_system_preds, full_allocation_system_decisions, full_targets, full_metrics = evaluate_one_epoch(epoch, feature_extractor, 
+                                                                                                                                                     classifier, allocation_system, 
+                                                                                                                                                     full_loader, 
+                                                                                                                                                     experts_fns_eval, loss_fn, 
+                                                                                                                                                     param=param)
 
         if method == "Joint Sparse Framework":
             if val_system_accuracy > best_val_system_accuracy:
@@ -140,51 +152,99 @@ def run_team_performance_optimization(method, seed, data_loaders, expert_fns, pa
             run = param["NEPTUNE"]["RUN"]
 
             run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Train" + "/system_accuracy"].append(train_system_accuracy)
-            run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Train" + "/train_system_loss"].append(train_system_loss)
+            run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Train" + "/train_system_loss"].append(train_system_loss.item())
             run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Train" + "/Classifier Accuracy"].append(train_metrics["Classifier Accuracy"])
             run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Train" + "/Classifier Task Subset Accuracy"].append(train_metrics["Classifier Task Subset Accuracy"])
             run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Train" + "/Classifier Coverage"].append(train_metrics["Classifier Coverage"])
             for expert_idx in range(len(expert_fns)):
-                run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Train/Expert_{labelerIds[expert_idx]}" + "/expert_accuracy"].append(metrics[f'Expert {expert_idx+1} Accuracy'])
-                run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Train/Expert_{labelerIds[expert_idx]}" + "/expert_task_subset_accuracy"].append(metrics[f'Expert {expert_idx+1} Task Subset Accuracy'])
-                run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Train/Expert_{labelerIds[expert_idx]}" + "/expert_coverage"].append(metrics[f'Expert {expert_idx+1} Coverage'])
+                run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Train/Expert_{labelerIds[expert_idx]}" + "/expert_accuracy"].append(train_metrics[f'Expert {expert_idx+1} Accuracy'])
+                run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Train/Expert_{labelerIds[expert_idx]}" + "/expert_task_subset_accuracy"].append(train_metrics[f'Expert {expert_idx+1} Task Subset Accuracy'])
+                run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Train/Expert_{labelerIds[expert_idx]}" + "/expert_coverage"].append(train_metrics[f'Expert {expert_idx+1} Coverage'])
 
             run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Val" + "/system_accuracy"].append(val_system_accuracy)
-            run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Val" + "/train_system_loss"].append(val_system_loss)
+            run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Val" + "/train_system_loss"].append(val_system_loss.item())
             run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Val" + "/Classifier Accuracy"].append(val_metrics["Classifier Accuracy"])
             run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Val" + "/Classifier Task Subset Accuracy"].append(val_metrics["Classifier Task Subset Accuracy"])
             run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Val" + "/Classifier Coverage"].append(val_metrics["Classifier Coverage"])
+            for expert_idx in range(len(expert_fns)):
+                run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Val/Expert_{labelerIds[expert_idx]}" + "/expert_accuracy"].append(val_metrics[f'Expert {expert_idx+1} Accuracy'])
+                run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Val/Expert_{labelerIds[expert_idx]}" + "/expert_task_subset_accuracy"].append(val_metrics[f'Expert {expert_idx+1} Task Subset Accuracy'])
+                run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Val/Expert_{labelerIds[expert_idx]}" + "/expert_coverage"].append(val_metrics[f'Expert {expert_idx+1} Coverage'])
 
             run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Test" + "/system_accuracy"].append(test_system_accuracy)
-            run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Test" + "/train_system_loss"].append(test_system_loss)
+            run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Test" + "/train_system_loss"].append(test_system_loss.item())
             run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Test" + "/Classifier Accuracy"].append(test_metrics["Classifier Accuracy"])
             run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Test" + "/Classifier Task Subset Accuracy"].append(test_metrics["Classifier Task Subset Accuracy"])
             run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Test" + "/Classifier Coverage"].append(test_metrics["Classifier Coverage"])
+            for expert_idx in range(len(expert_fns)):
+                run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Test/Expert_{labelerIds[expert_idx]}" + "/expert_accuracy"].append(test_metrics[f'Expert {expert_idx+1} Accuracy'])
+                run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Test/Expert_{labelerIds[expert_idx]}" + "/expert_task_subset_accuracy"].append(test_metrics[f'Expert {expert_idx+1} Task Subset Accuracy'])
+                run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Test/Expert_{labelerIds[expert_idx]}" + "/expert_coverage"].append(test_metrics[f'Expert {expert_idx+1} Coverage'])
+
+            run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Full" + "/system_accuracy"].append(full_system_accuracy)
+            run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Full" + "/train_system_loss"].append(full_system_loss.item())
+            run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Full" + "/Classifier Accuracy"].append(full_metrics["Classifier Accuracy"])
+            run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Full" + "/Classifier Task Subset Accuracy"].append(full_metrics["Classifier Task Subset Accuracy"])
+            run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Full" + "/Classifier Coverage"].append(full_metrics["Classifier Coverage"])
+            for expert_idx in range(len(expert_fns)):
+                run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Full/Expert_{labelerIds[expert_idx]}" + "/expert_accuracy"].append(full_metrics[f'Expert {expert_idx+1} Accuracy'])
+                run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Full/Expert_{labelerIds[expert_idx]}" + "/expert_task_subset_accuracy"].append(full_metrics[f'Expert {expert_idx+1} Task Subset Accuracy'])
+                run[f"Seed_{seed}/Fold_{fold}/L2D/Hemmer/Full/Expert_{labelerIds[expert_idx]}" + "/expert_coverage"].append(full_metrics[f'Expert {expert_idx+1} Coverage'])
 
         all_train_metrics[epoch] = {}
         all_val_metrics[epoch] = {}
         all_test_metrics[epoch] = {}
+        all_full_metrics[epoch] = {}
 
         all_train_metrics[epoch]["system_accuracy"] = train_system_accuracy
-        all_train_metrics[epoch]["train_system_loss"] = train_system_loss
+        all_train_metrics[epoch]["train_system_loss"] = train_system_loss.item()
         all_train_metrics[epoch]["Classifier Accuracy"] = train_metrics["Classifier Accuracy"]
         all_train_metrics[epoch]["Classifier Task Subset Accuracy"] = train_metrics["Classifier Task Subset Accuracy"]
         all_train_metrics[epoch]["Classifier Coverage"] = train_metrics["Classifier Coverage"]
+        for expert_idx in range(len(expert_fns)):
+            all_train_metrics[epoch][f"Expert_{labelerIds[expert_idx]}"] = {
+                "expert_accuracy": train_metrics[f'Expert {expert_idx+1} Accuracy'],
+                "expert_task_subset_accuracy": train_metrics[f'Expert {expert_idx+1} Task Subset Accuracy'],
+                "expert_coverage": train_metrics[f'Expert {expert_idx+1} Coverage'],
+            }
 
         all_val_metrics[epoch]["system_accuracy"] = val_system_accuracy
-        all_val_metrics[epoch]["train_system_loss"] = val_system_loss
+        all_val_metrics[epoch]["train_system_loss"] = val_system_loss.item()
         all_val_metrics[epoch]["Classifier Accuracy"] = val_metrics["Classifier Accuracy"]
         all_val_metrics[epoch]["Classifier Task Subset Accuracy"] = val_metrics["Classifier Task Subset Accuracy"]
         all_val_metrics[epoch]["Classifier Coverage"] = val_metrics["Classifier Coverage"]
+        for expert_idx in range(len(expert_fns)):
+            all_val_metrics[epoch][f"Expert_{labelerIds[expert_idx]}"] = {
+                "expert_accuracy": val_metrics[f'Expert {expert_idx+1} Accuracy'],
+                "expert_task_subset_accuracy": val_metrics[f'Expert {expert_idx+1} Task Subset Accuracy'],
+                "expert_coverage": val_metrics[f'Expert {expert_idx+1} Coverage'],
+            }
 
         all_test_metrics[epoch]["system_accuracy"] = test_system_accuracy
-        all_test_metrics[epoch]["train_system_loss"] = test_system_loss
+        all_test_metrics[epoch]["train_system_loss"] = test_system_loss.item()
         all_test_metrics[epoch]["Classifier Accuracy"] = test_metrics["Classifier Accuracy"]
         all_test_metrics[epoch]["Classifier Task Subset Accuracy"] = test_metrics["Classifier Task Subset Accuracy"]
         all_test_metrics[epoch]["Classifier Coverage"] = test_metrics["Classifier Coverage"]
+        for expert_idx in range(len(expert_fns)):
+            all_test_metrics[epoch][f"Expert_{labelerIds[expert_idx]}"] = {
+                "expert_accuracy": test_metrics[f'Expert {expert_idx+1} Accuracy'],
+                "expert_task_subset_accuracy": test_metrics[f'Expert {expert_idx+1} Task Subset Accuracy'],
+                "expert_coverage": test_metrics[f'Expert {expert_idx+1} Coverage'],
+            }
+
+        all_full_metrics[epoch]["system_accuracy"] = test_system_accuracy
+        all_full_metrics[epoch]["train_system_loss"] = test_system_loss.item()
+        all_full_metrics[epoch]["Classifier Accuracy"] = test_metrics["Classifier Accuracy"]
+        all_full_metrics[epoch]["Classifier Task Subset Accuracy"] = test_metrics["Classifier Task Subset Accuracy"]
+        all_full_metrics[epoch]["Classifier Coverage"] = test_metrics["Classifier Coverage"]
+        for expert_idx in range(len(expert_fns)):
+            all_full_metrics[epoch][f"Expert_{labelerIds[expert_idx]}"] = {
+                "expert_accuracy": full_metrics[f'Expert {expert_idx+1} Accuracy'],
+                "expert_task_subset_accuracy": full_metrics[f'Expert {expert_idx+1} Task Subset Accuracy'],
+                "expert_coverage": full_metrics[f'Expert {expert_idx+1} Coverage'],
+            }
 
         
-
     overall_system_preds.extend(list(best_epoch_system_preds))
     overall_allocation_system_decisions.extend(list(best_epoch_allocation_system_decisions))
     overall_targets.extend(list(best_epoch_targets))
@@ -192,7 +252,7 @@ def run_team_performance_optimization(method, seed, data_loaders, expert_fns, pa
     system_accuracy = get_accuracy(overall_system_preds, overall_targets)
     classifier_coverage = np.sum([1 for dec in overall_allocation_system_decisions if dec==0])
     
-    return system_accuracy, classifier_coverage, all_train_metrics, all_val_metrics, all_test_metrics
+    return system_accuracy, classifier_coverage, all_train_metrics, all_val_metrics, all_test_metrics, all_full_metrics
 
 def train_one_epoch(epoch, feature_extractor, classifier, allocation_system, train_loader, optimizer, scheduler, expert_fns, loss_fn, param=None):
     feature_extractor.eval()
