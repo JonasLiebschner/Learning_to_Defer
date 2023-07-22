@@ -10,7 +10,6 @@ from SSL.feature_extractor.emb_model_lib import EmbeddingModel
 import Dataset.Dataset as ds
 import torch
 
-#from __future__ import print_function
 import random
 
 import time
@@ -25,7 +24,7 @@ from SSL.LinearModel import LinearNN
 import SSL.datasets.nih as nih
 from SSL.utils import accuracy, setup_default_logging, AverageMeter, WarmupCosineLrScheduler
 from SSL.utils import load_from_checkpoint
-from SSL.Expert import CIFAR100Expert, NIHExpert
+#from SSL.Expert import CIFAR100Expert, NIHExpert
 from SSL.feature_extractor.embedding_model import EmbeddingModel as EmbeddingModelL
 
 def set_seed(seed):

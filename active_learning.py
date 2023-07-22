@@ -28,7 +28,7 @@ from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 from PIL import Image
 
-import Verma.experts as vexp
+#import Verma.experts as vexp
 import Verma.losses as vlos
 from Verma.utils import AverageMeter, accuracy
 import Verma.resnet50 as vres
@@ -364,7 +364,7 @@ def getQbQPointsDifference(expert_models, data_loader, budget, mod=None, param=N
                     assert isinstance(expert_model, nn.Module), "expert_model is not type nn.Module"
                     outputs_exp = expert_model(images)
                 elif mod == "ssl":
-                    assert isinstance(expert_model, ex.Expert), "expert is not type Expert"
+                    assert isinstance(expert_models[expert_model], ex.Expert), "expert is not type Expert"
                     expert = expert_model # only for better readability
                     features = expert.sslModel.embedded_model.get_embedding(batch=images)
                     logits, _ = expert.sslModel.linear_model(features)
@@ -825,7 +825,7 @@ def metrics_print_expert(model, data_loader, expert=None, defer_net = False, id=
     data_loader: data loader
     '''
 
-    assert (mod is not None) and (mod == "al" or mod == "ssl"), "You have to pass a mod (al or ssl)"
+    assert (mod is not None) and (mod == "al" or mod == "ssl" or mod == "perfect"), "You have to pass a mod (al or ssl)"
     assert (prediction_type == "target" or prediction_type == "right"), "You have to pass a prediction_type (target or right)"
     if param["NEPTUNE"]["NEPTUNE"]:
         assert step != "", "Need step"
@@ -855,6 +855,8 @@ def metrics_print_expert(model, data_loader, expert=None, defer_net = False, id=
                 predictions = torch.argmax(scores, dim=1)#.cpu()#.tolist()
                 #preds, preds2 = torch.max(scores, 1)
                 #output = scores
+            elif mod == "perfect":
+                predictions = expert_pred.to(device)
 
             if cou == 1:
                 print("###########")
@@ -950,9 +952,14 @@ def testExpert(expert, dataset, image_container, param, mod, prediction_type, se
     else:
         param_neptune_off = copy.deepcopy(param)
     if mod == "al":
-        metrics = metrics_print_expert(model=model, data_loader=data_loader, expert=None, id=expert.labelerId, mod=mod, prediction_type=prediction_type, param=param_neptune_off, print_result=False)
+        metrics = metrics_print_expert(model=model, data_loader=data_loader, expert=None, id=expert.labelerId, mod=mod, prediction_type=prediction_type, param=param_neptune_off, 
+                                       print_result=False)
     elif mod == "ssl":
-        metrics = metrics_print_expert(model=None, data_loader=data_loader, expert=expert, id=expert.labelerId, mod=mod, prediction_type=prediction_type, param=param_neptune_off, print_result=False)
+        metrics = metrics_print_expert(model=None, data_loader=data_loader, expert=expert, id=expert.labelerId, mod=mod, prediction_type=prediction_type, param=param_neptune_off, 
+                                       print_result=False)
+    elif mod == "perfect":
+        metrics = metrics_print_expert(model=None, data_loader=data_loader, expert=expert, id=expert.labelerId, mod=mod, prediction_type=prediction_type, param=param_neptune_off, 
+                                       print_result=False)
 
     if param["NEPTUNE"]["NEPTUNE"]:
         output = data_name + "_Start_End"
