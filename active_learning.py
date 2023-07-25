@@ -365,7 +365,7 @@ def getQbQPointsDifference(expert_models, data_loader, budget, mod=None, param=N
                     outputs_exp = expert_model(images)
                 elif mod == "ssl":
                     assert isinstance(expert_models[expert_model], ex.Expert), "expert is not type Expert"
-                    expert = expert_model # only for better readability
+                    expert = expert_models[expert_model] # only for better readability
                     features = expert.sslModel.embedded_model.get_embedding(batch=images)
                     logits, _ = expert.sslModel.linear_model(features)
                     scores = torch.softmax(logits, dim=1)

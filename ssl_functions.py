@@ -200,8 +200,7 @@ def train_one_epoch(epoch,
         ims_x_weak, lbs_x, im_id = next(dl_x)
         (ims_u_weak, ims_u_strong0, ims_u_strong1), lbs_u_real, im_id = next(dl_u)
 
-        lbs_x = lbs_x.type(torch.LongTensor) 
-        lbs_x = lbs_x.cuda()
+        lbs_x = lbs_x.type(torch.LongTensor).cuda()
         lbs_u_real = lbs_u_real.cuda()
 
         # --------------------------------------
@@ -212,11 +211,14 @@ def train_one_epoch(epoch,
         embedding = emb_model.get_embedding(batch=imgs)
         logits, features = model(embedding)
 
-        logits_x = logits[:bt]
+        """logits_x = logits[:bt]
         logits_u_w, logits_u_s0, logits_u_s1 = torch.split(logits[bt:], btu)
         
         feats_x = features[:bt]
-        feats_u_w, feats_u_s0, feats_u_s1 = torch.split(features[bt:], btu)
+        feats_u_w, feats_u_s0, feats_u_s1 = torch.split(features[bt:], btu)"""
+
+        logits_x, logits_u_w, logits_u_s0, logits_u_s1 = torch.split(logits, [bt, btu, btu, btu])
+        feats_x, feats_u_w, feats_u_s0, feats_u_s1 = torch.split(features, [bt, btu, btu, btu])
 
         
         loss_x = criteria_x(logits_x, lbs_x)
@@ -226,7 +228,8 @@ def train_one_epoch(epoch,
             feats_x = feats_x.detach()
             feats_u_w = feats_u_w.detach()
             
-            probs = torch.softmax(logits_u_w, dim=1)            
+            #probs = torch.softmax(logits_u_w, dim=1)  
+            probs = F.softmax(logits_u_w, dim=1) 
             # DA
             prob_list.append(probs.mean(0))
             if len(prob_list)>32:
@@ -336,7 +339,7 @@ def evaluate(model, ema_model, emb_model, dataloader):
 
             embedding = emb_model.get_embedding(batch=ims)
             logits, _ = model(embedding)
-            scores = torch.softmax(logits, dim=1)
+            scores = F.softmax(logits, dim=1)
             preds += torch.argmax(scores, dim=1).detach().cpu().tolist()
             targets += lbs.detach().cpu().tolist()
             top1 = accuracy(scores, lbs, (1, ))
@@ -345,7 +348,7 @@ def evaluate(model, ema_model, emb_model, dataloader):
             if ema_model is not None:
                 embedding = emb_model.get_embedding(batch=ims)
                 logits, _ = ema_model(embedding)
-                scores = torch.softmax(logits, dim=1)
+                scores = F.softmax(logits, dim=1)
                 top1 = accuracy(scores, lbs, (1, ))
                 ema_top1_meter.update(top1.item())
     return top1_meter.avg, ema_top1_meter.avg
