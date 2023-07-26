@@ -857,14 +857,33 @@ class SSLDataset():
         """
         #Generate random seeds for every loop
         self.labeled_indices = []
+        self.addedIndices = []
         for i in range(self.k):
             train_data, _, _ = self.k_fold_datasets[i]            
             sampled_indices = self.sampleIndices(n=n_L, k=k, data=train_data, experten=labelerIds, seed=seed, sample_equal=sample_equal, fold=i)
             #print(sampled_indices)
             self.labeled_indices.append(sampled_indices)
+
+            #Set empty additional indices for every fold and every expert. Important for AL because indices could be added later
+            self.addedIndices.append({})
+            for labelerId in labelerIds:
+                self.addedIndices[-1][labelerId] = []
         
     def getLabeledIndices(self, labelerId, fold_idx):
-        return self.labeled_indices[fold_idx][labelerId]
+        return self.labeled_indices[fold_idx][labelerId] + self.addedIndices[fold_idx][labelerId]
+
+    def addNewLabels(self, filenames, fold_idx, labelerId):
+        """
+        Add new indeces for labeled images for ssl in combination with active learning
+
+        filenames contains the names of the new labeled images
+        fold_idx is the current fold to spezify where the indices should be set
+        """
+        train_data, _, _ = self.getDatasetsForExpert(labelerId, fold_idx)
+        X = np.array(train_data["Image ID"])
+        indices = [numpy.where(X == item)[0] for item in filenames]
+        assert set(filenames) == set(X.tolist()[indices]), "Filenames don't match" #Check if indices are correct
+        self.addedIndices[fold_idx][labelerId] = indices
         
     def getDatasetsForExpert(self, labelerId, fold_idx):
         print("Index: " + str(fold_idx))

@@ -374,7 +374,7 @@ class exper:
         self.labeler_id = id
 
 
-def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded_model=None, param=None, neptune_param=None):
+def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded_model=None, param=None, neptune_param=None, added_epochs=0):
     args = {
         "dataset": "NIH", #
         "wresnet_k": 2, #width factor of wide resnet
@@ -491,7 +491,7 @@ def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded
         best_acc = metrics['best_acc']
         best_epoch = metrics['best_epoch']
     logger.info('-----------start training--------------')
-    for epoch in range(start_epoch, args["n_epoches"]):
+    for epoch in range(start_epoch, args["n_epoches"] + added_epochs):
         
         loss_x, loss_u, loss_c, mask_mean, num_pos, guess_label_acc, queue_feats, queue_probs, queue_ptr, prob_list = \
         train_one_epoch(epoch, **train_args, queue_feats=queue_feats,queue_probs=queue_probs,queue_ptr=queue_ptr)
