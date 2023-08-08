@@ -41,7 +41,8 @@ def create_embedded_model(dataloaders, param, neptune_param, fold, seed):
     path = param["PATH"]
     neptune_param = neptune_param
 
-    wkdir = os.getcwd() + "/SSL_Working"
+    #wkdir = os.getcwd() + "/SSL_Working"
+    wkdir = param["Parent_PATH"] + "/SSL_Working"
     sys.path.append(wkdir)
 
     SAVE = True
@@ -196,7 +197,11 @@ def train_one_epoch(epoch,
     
     epoch_start = time.time()  # start time
     dl_x, dl_u = iter(dltrain_x), iter(dltrain_u)
+    count = 0
     for it in range(n_iters):
+        if count%10 == 0:
+            print(count)
+        count += 1
         ims_x_weak, lbs_x, im_id = next(dl_x)
         (ims_u_weak, ims_u_strong0, ims_u_strong1), lbs_u_real, im_id = next(dl_u)
 
@@ -208,8 +213,16 @@ def train_one_epoch(epoch,
         btu = ims_u_weak.size(0)
 
         imgs = torch.cat([ims_x_weak, ims_u_weak, ims_u_strong0, ims_u_strong1], dim=0).cuda()
+        if count == 1:
+            print(imgs)
         embedding = emb_model.get_embedding(batch=imgs)
+
+        if count == 1:
+            print(embedding)
         logits, features = model(embedding)
+
+        if count < 2:
+            print(logits)
 
         """logits_x = logits[:bt]
         logits_u_w, logits_u_s0, logits_u_s1 = torch.split(logits[bt:], btu)
@@ -405,7 +418,8 @@ def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded
     args["ex_strength"] = labelerId
     args["n_labeled"] = n_labeled
     args["seed"] = seed
-    args["n_epoches"] = param["SSL"]["N_EPOCHS"]
+    args["n_epoches"] = param["SSL"]["N_EPOCHS"] + added_epochs
+    print(f"Epochs added: {added_epochs}")
     args["batchsize"] = param["SSL"]["BATCHSIZE"]
     args["n_imgs_per_epoch"] = param["SSL"]["N_IMGS_PER_EPOCH"]
     if param["EMBEDDED"]["ARGS"]["model"] == "resnet18":
@@ -415,7 +429,7 @@ def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded
     path = param["PATH"]
 
     #Setzt Logger fest
-    logger, output_dir = setup_default_logging("SSL_Working/", args)
+    logger, output_dir = setup_default_logging(f"{param["Parent_PATH"]}/SSL_Working/", args)
     logger.info(dict(args))
     
     tb_logger = SummaryWriter(output_dir)
@@ -429,7 +443,8 @@ def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded
     #Erstellt das Modell
     model, criteria_x, ema_model = set_model(args)
     #Lädt das trainierte eingebettete Modell
-    emb_model = EmbeddingModelL(os.getcwd() + "/SSL_Working", args["dataset"], type=args["type"])
+    #emb_model = EmbeddingModelL(os.getcwd() + "/SSL_Working", args["dataset"], type=args["type"])
+    emb_model = EmbeddingModelL(param["Parent_PATH"] + "/SSL_Working", args["dataset"], type=args["type"])
     logger.info("Total params: {:.2f}M".format(
         sum(p.numel() for p in model.parameters()) / 1e6))
 
@@ -491,7 +506,7 @@ def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded
         best_acc = metrics['best_acc']
         best_epoch = metrics['best_epoch']
     logger.info('-----------start training--------------')
-    for epoch in range(start_epoch, args["n_epoches"] + added_epochs):
+    for epoch in range(start_epoch, args["n_epoches"]):
         
         loss_x, loss_u, loss_c, mask_mean, num_pos, guess_label_acc, queue_feats, queue_probs, queue_ptr, prob_list = \
         train_one_epoch(epoch, **train_args, queue_feats=queue_feats,queue_probs=queue_probs,queue_ptr=queue_ptr)

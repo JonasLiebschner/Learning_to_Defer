@@ -26,6 +26,7 @@ from scipy.stats import entropy
 
 import sklearn
 import copy
+import sys
 
 import gc
 from torch.utils.data import DataLoader
@@ -636,8 +637,8 @@ def one_run(dataManager, run_param):
         for fold_idx in range(run_param["K"]):
         #for fold_idx in range(4):
 
-            if os.path.isdir('SSL_Working'):
-            cleanTrainDir("SSL_Working")
+            if os.path.isdir(f'{run_param["Parent_PATH"]}/SSL_Working'):
+            cleanTrainDir(f"{run_param["Parent_PATH"]}/SSL_Working")
 
             if seed != "":
                 set_seed(seed, fold_idx, text="")
@@ -645,8 +646,8 @@ def one_run(dataManager, run_param):
             print("/n")
             print(f"Seed: {seed} - Fold: {fold_idx} \n")
 
-            if os.path.isdir('SSL_Working/NIH/EmbeddingCM_bin'):
-                cleanTrainDir("SSL_Working/NIH/EmbeddingCM_bin")
+            if os.path.isdir(f'{run_param["Parent_PATH"]}/SSL_Working/NIH/EmbeddingCM_bin'):
+                cleanTrainDir(f"{run_param["Parent_PATH"]}SSL_Working/NIH/EmbeddingCM_bin")
 
             neptune = {
                 "SEED": seed,
@@ -837,15 +838,14 @@ def run_experiment(param):
 
 
                                                 start_time = time.time()
-                                                expert_metrics, verma_metrics, hemmer_metrics = one_run(dataManager, 
-                                                                                                                                                                                                 run_param)
+                                                expert_metrics, verma_metrics, hemmer_metrics = one_run(dataManager, run_param)
                                                 print("--- %s seconds ---" % (time.time() - start_time))
 
                                                 metrics_save["expert metrics"] = expert_metrics
                                                 metrics_save["verma"] = verma_metrics
                                                 metrics_save["hemmer"] = hemmer_metrics
                                                 expert_metrics_all.append(metrics_save)
-                                                with open(f'Metrics_Folder/Metrics_{count}.pickle', 'wb') as handle:
+                                                with open(f'{param["Parent_PATH"]}/Metrics_Folder/Metrics_{count}.pickle', 'wb') as handle:
                                                     pickle.dump(expert_metrics_all, handle, protocol=pickle.HIGHEST_PROTOCOL)
                                                 count += 1
                                                 if param["NEPTUNE"]["NEPTUNE"]:
@@ -873,126 +873,113 @@ def convert_list_to_string(li):
     return 
 
 
-# In[ ]:
-
-
-
-
-
-# In[18]:
-
-
-param = {
-    "PATH": "../Datasets/NIH/",
-    "TARGET": "Airspace_Opacity",
-    "LABELER_IDS": [[4323195249, 4295232296]],
-    "K": 10, #Number of folds
-    "SEEDS": [1, 2, 3], #Seeds for the experiments
-    "GT": True, # Determines if the classifier gets all data with GT Label or only the labeld data
-    "MOD": ["confidence", "disagreement", "disagreement_diff", "ssl", "normal"], #Determines the experiment modus
-    #"MOD": ["confidence", "ssl", "normal"],
-
-    "OVERLAP": [0, 100],
-    "SAMPLE_EQUAL": [False, True],
-    #"INITAL_SIZE": [8, 16, 32],
-    #"ROUNDS": [2, 4, 8],
-    #"LABELS_PER_ROUND": [4, 8, 16],
-
-    "SETTING": ["AL", "SSL", "SSL_AL", "NORMAL"],
-    #"SETTING": ["SSL_AL"],
-
-    "NUM_EXPERTS": 2,
-    "NUM_CLASSES": 2,
-
-    "EXPERT_PREDICT": ["right", "target"],
-
-    "AL": { #Parameter for Active Learning
-        "INITIAL_SIZE": [8, 16, 32], #
-        "EPOCH_TRAIN": 40, #
-        "n_dataset": 2, #Number Classes
-        "BATCH_SIZE": 4,
-        "BATCH_SIZE_VAL": 32,
-        "ROUNDS": [2, 4, 8],
-        "LABELS_PER_ROUND": [4, 8, 16],
-        "EPOCHS_DEFER": 10,
-        "COST": [(0, 0), (5, 0)], #Cost for Cost sensitiv learning
-        #"TRAIN REJECTOR": False,
-        "PRELOAD": True,
-        "PREPROCESS": True,
-        
-    },
-    "SSL": {
-        "PREBUILD": False,
-        #"TRAIN_BATCH_SIZE": 128,
-        "TRAIN_BATCH_SIZE": 254,
-        "TEST_BATCH_SIZE": 254,
-        "N_EPOCHS": 5, #number of training epoches
-        "BATCHSIZE": 16, #train batch size of labeled samples
-        #"N_IMGS_PER_EPOCH": 32768, #number of training images for each epoch
-        "N_IMGS_PER_EPOCH": 4381*1, #number of training images for each epoch
-    },
-    "L2D": { # Parameter for Learning to defer
-        "TRAIN_BATCH_SIZE": 128,
-        "TEST_BATCH_SIZE": 128,
-        "PRELOAD": True,
-        "PREBUILD": True,
-        "EPOCHS": 50,
-        "VERMA": {},
-        "HEMMER": {
-            "EPOCHS": 50,
-            "LR": 5e-3,
-            "USE_LR_SCHEDULER": False,
-            "DROPOUT": 0.00,
-            "NUM_HIDDEN_UNITS": 30,
-        },
-        
-    },
-    "NEPTUNE": {
-        "NEPTUNE": True,
-    },
-    "EMBEDDED": {
-        "ARGS": {
-            'dataset': "nih",
-            'model': "resnet50",
-            'num_classes': 2,
-            'batch': 128,
-            'lr': 0.001,
-        },
-        "EPOCHS": 30,
-    },
-    
-    
-    "epochs_pretrain": [0],
-    "batch_size": 64,
-    "alpha": 1.0, #scaling parameter for the loss function, default=1.0
-    "epochs": 50,
-    "patience": 25, #number of patience steps for early stopping the training
-    "expert_type": "MLPMixer", #specify the expert type. For the type of experts available, see-> models -> experts. defualt=predict
-    "n_classes": 2, #K for K class classification
-    "k": 0, #
-    "n_experts": 2, #
-    "lr": 0.001, #learning rate
-    "weight_decay": 5e-4, #
-    "warmup_epochs": 5, #
-    #"loss_type": "softmax", #surrogate loss type for learning to defer
-    "loss_type": "ova",
-    "ckp_dir": "./Models", #directory name to save the checkpoints
-    "experiment_name": "multiple_experts", #specify the experiment name. Checkpoints will be saved with this name
-}
-
-
-# In[19]:
-
-
 #CUDA_LAUNCH_BLOCKING=1
 torch.backends.cudnn.benchmark = True
 
 
 # In[ ]:
+def main(args):
 
+    path = args[0]
 
-expert_metrics_all = run_experiment(param)
+    param = {
+        "PATH": f"{path}/Datasets/NIH/",
+        "Parent_PATH": path,
+        "TARGET": "Airspace_Opacity",
+        "LABELER_IDS": [[4323195249, 4295232296]],
+        "K": 10, #Number of folds
+        "SEEDS": [1, 2, 3], #Seeds for the experiments
+        "GT": True, # Determines if the classifier gets all data with GT Label or only the labeld data
+        "MOD": ["confidence", "disagreement", "disagreement_diff", "ssl", "normal"], #Determines the experiment modus
 
+        "OVERLAP": [0, 100],
+        "SAMPLE_EQUAL": [False, True],
+
+        "SETTING": ["AL", "SSL", "SSL_AL", "NORMAL"],
+
+        "NUM_EXPERTS": 2,
+        "NUM_CLASSES": 2,
+
+        "EXPERT_PREDICT": ["right", "target"],
+
+        "AL": { #Parameter for Active Learning
+            "INITIAL_SIZE": [8, 16, 32], #
+            "EPOCH_TRAIN": 40, #
+            "n_dataset": 2, #Number Classes
+            "BATCH_SIZE": 4,
+            "BATCH_SIZE_VAL": 32,
+            "ROUNDS": [2, 4, 8],
+            "LABELS_PER_ROUND": [4, 8, 16],
+            "EPOCHS_DEFER": 10,
+            "COST": [(0, 0), (5, 0)], #Cost for Cost sensitiv learning
+            #"TRAIN REJECTOR": False,
+            "PRELOAD": True,
+            "PREPROCESS": True,
+        
+        },
+        "SSL": {
+            "PREBUILD": False,
+            #"TRAIN_BATCH_SIZE": 128,
+            "TRAIN_BATCH_SIZE": 254,
+            "TEST_BATCH_SIZE": 254,
+            "N_EPOCHS": 5, #number of training epoches
+            "BATCHSIZE": 16, #train batch size of labeled samples
+            #"N_IMGS_PER_EPOCH": 32768, #number of training images for each epoch
+            "N_IMGS_PER_EPOCH": 4381*1, #number of training images for each epoch
+        },
+        "L2D": { # Parameter for Learning to defer
+            "TRAIN_BATCH_SIZE": 128,
+            "TEST_BATCH_SIZE": 128,
+            "PRELOAD": True,
+            "PREBUILD": True,
+            "EPOCHS": 50,
+            "VERMA": {},
+            "HEMMER": {
+                "EPOCHS": 50,
+                "LR": 5e-3,
+                "USE_LR_SCHEDULER": False,
+                "DROPOUT": 0.00,
+                "NUM_HIDDEN_UNITS": 30,
+            },
+        
+        },
+        "NEPTUNE": {
+            "NEPTUNE": True,
+        },
+        "EMBEDDED": {
+            "ARGS": {
+                'dataset': "nih",
+                'model': "resnet50",
+                'num_classes': 2,
+                'batch': 128,
+                'lr': 0.001,
+            },
+            "EPOCHS": 30,
+        },
+    
+    
+        "epochs_pretrain": [0],
+        "batch_size": 64,
+        "alpha": 1.0, #scaling parameter for the loss function, default=1.0
+        "epochs": 50,
+        "patience": 25, #number of patience steps for early stopping the training
+        "expert_type": "MLPMixer", #specify the expert type. For the type of experts available, see-> models -> experts. defualt=predict
+        "n_classes": 2, #K for K class classification
+        "k": 0, #
+        "n_experts": 2, #
+        "lr": 0.001, #learning rate
+        "weight_decay": 5e-4, #
+        "warmup_epochs": 5, #
+        #"loss_type": "softmax", #surrogate loss type for learning to defer
+        "loss_type": "ova",
+        "ckp_dir": f"{path}/Models", #directory name to save the checkpoints
+        "experiment_name": "multiple_experts", #specify the experiment name. Checkpoints will be saved with this name
+    }
+
+    expert_metrics_all = run_experiment(param)
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
 
 # In[ ]:
 
@@ -1000,8 +987,8 @@ expert_metrics_all = run_experiment(param)
 
 
 # Store data (serialize)
-with open('Metrics.pickle', 'wb') as handle:
-    pickle.dump(expert_metrics_all, handle, protocol=pickle.HIGHEST_PROTOCOL)
+#with open('Metrics.pickle', 'wb') as handle:
+#    pickle.dump(expert_metrics_all, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 # Load data (deserialize)
 #with open('filename.pickle', 'rb') as handle:
