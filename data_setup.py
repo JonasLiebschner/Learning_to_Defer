@@ -16,6 +16,8 @@ from tqdm import tqdm
 from tabulate import tabulate
 import urllib
 
+import tarfile
+
 import sys
 
 
