@@ -881,9 +881,11 @@ class SSLDataset():
         """
         train_data, _, _ = self.getDatasetsForExpert(labelerId, fold_idx)
         X = np.array(train_data["Image ID"])
-        indices = [numpy.where(X == item)[0] for item in filenames]
-        assert set(filenames) == set(X.tolist()[indices]), "Filenames don't match" #Check if indices are correct
-        self.addedIndices[fold_idx][labelerId] = indices
+        indices = [np.where(X == item)[0] for item in filenames]
+        assert set(filenames) == set(np.array(X)[indices].flatten()), "Filenames don't match" #Check if indices are correct
+        #self.addedIndices[fold_idx][labelerId] = indices
+        self.addedIndices[fold_idx][labelerId] += np.array([list(idx) for idx in indices]).flatten().tolist()
+        print(self.addedIndices[fold_idx][labelerId])
         
     def getDatasetsForExpert(self, labelerId, fold_idx):
         print("Index: " + str(fold_idx))
