@@ -121,6 +121,9 @@ def main(args):
 
     print(f"Path for data: {path}")
 
+    if path[-1] != "/":
+        path += "/"
+
     answer = input("Continue?")
     if answer.lower() in ["y","yes"]:
         downloadData(path)
