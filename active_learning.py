@@ -450,7 +450,7 @@ def getExpertModels(indices, experts, train_dataset, val_dataset, test_dataset, 
         gc.collect()
         
         #expert_models.append(NetSimple(2, 3, 100, 100, 1000,500).to(device))
-        expert_models[labelerId] = ResnetPretrained(2, "./SSL_Working", type="50").to(device)
+        expert_models[labelerId] = ResnetPretrained(2, param["Parent_PATH"]+"/SSL_Working", type="50").to(device)
         dataloaders = (dataLoaderTrainLabeled, dataLoaderValUnlabeled)
         train_metrics, val_metrics = run_expert(expert_models[labelerId], param_al["EPOCH_TRAIN"], dataloaders, param=param, id=expert.labelerId, seed=seed, fold=fold, 
                    n_images=param_al["INITIAL_SIZE"], mod=learning_mod, prediction_type=prediction_type)
@@ -570,7 +570,7 @@ def getExpertModel(indices, train_dataset, val_dataset, test_dataset, expert, pa
     
     # train expert model on labeled data
     #model_expert = NetSimple(2, 3, 100, 100, 1000,500).to(device)
-    model_expert = ResnetPretrained(2, "./SSL_Working", type="50").to(device)
+    model_expert = ResnetPretrained(2, param["Parent_PATH"]+"/SSL_Working", type="50").to(device)
     # Trainier Modell um Experten vorherzusagen
 
     dataloaders = (dataLoaderTrainLabeled, dataLoaderValUnlabeled)
@@ -667,7 +667,7 @@ def getExpertModelNormal(indices, train_dataset, val_dataset, test_dataset, expe
     
     # train expert model on labeled data
     #model_expert = NetSimple(2, 3, 100, 100, 1000,500).to(device)
-    model_expert = ResnetPretrained(2, "./SSL_Working", type="50").to(device)
+    model_expert = ResnetPretrained(2, param["Parent_PATH"]+"/SSL_Working", type="50").to(device)
     # Trainier Modell um Experten vorherzusagen
 
     dataloaders = (dataLoaderTrainLabeled, dataLoaderValUnlabeled)
