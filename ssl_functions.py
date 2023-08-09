@@ -199,9 +199,6 @@ def train_one_epoch(epoch,
     dl_x, dl_u = iter(dltrain_x), iter(dltrain_u)
     count = 0
     for it in range(n_iters):
-        if count%10 == 0:
-            print(count)
-        count += 1
         ims_x_weak, lbs_x, im_id = next(dl_x)
         (ims_u_weak, ims_u_strong0, ims_u_strong1), lbs_u_real, im_id = next(dl_u)
 
@@ -213,15 +210,11 @@ def train_one_epoch(epoch,
         btu = ims_u_weak.size(0)
 
         imgs = torch.cat([ims_x_weak, ims_u_weak, ims_u_strong0, ims_u_strong1], dim=0).cuda()
-        if count == 1:
-            print(imgs)
         embedding = emb_model.get_embedding(batch=imgs)
 
-        if count == 1:
-            print(embedding)
         logits, features = model(embedding)
 
-        if count < 2:
+        if torch.isnan(logits).any():
             print(logits)
 
         """logits_x = logits[:bt]
@@ -418,8 +411,11 @@ def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded
     args["ex_strength"] = labelerId
     args["n_labeled"] = n_labeled
     args["seed"] = seed
-    args["n_epoches"] = param["SSL"]["N_EPOCHS"] + added_epochs
-    print(f"Epochs added: {added_epochs}")
+    args["n_epoches"] = param["SSL"]["N_EPOCHS"]
+    if added_epochs != 0: #Maybe start "new" when ssl for active learning beacuse additional training doesn't work (nan values)
+        args["n_epoches"] = added_epochs
+        print(f"Epochs added: {added_epochs}")
+        
     args["batchsize"] = param["SSL"]["BATCHSIZE"]
     args["n_imgs_per_epoch"] = param["SSL"]["N_IMGS_PER_EPOCH"]
     if param["EMBEDDED"]["ARGS"]["model"] == "resnet18":
@@ -429,7 +425,7 @@ def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded
     path = param["PATH"]
 
     #Setzt Logger fest
-    logger, output_dir = setup_default_logging(f"{param["Parent_PATH"]}/SSL_Working/", args)
+    logger, output_dir = setup_default_logging(f"{param['Parent_PATH']}/SSL_Working/", args)
     logger.info(dict(args))
     
     tb_logger = SummaryWriter(output_dir)
@@ -473,6 +469,14 @@ def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded
     model, ema_model, optim, lr_schdlr, start_epoch, metrics, prob_list, queue = \
         load_from_checkpoint(output_dir, model, ema_model, optim, lr_schdlr)
 
+    if added_epochs > 0: #Reset for added epochs
+        optim = torch.optim.SGD(param_list, lr=args["lr"], weight_decay=args["weight_decay"],
+                            momentum=args["momentum"], nesterov=True)
+
+        lr_schdlr = WarmupCosineLrScheduler(optim, n_iters_all, warmup_iter=0)
+
+        queue = None
+
     # memory bank
     args["queue_size"] = args["queue_batch"]*(args["mu"]+1)*args["batchsize"]
     if queue is not None:
@@ -506,6 +510,10 @@ def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded
         best_acc = metrics['best_acc']
         best_epoch = metrics['best_epoch']
     logger.info('-----------start training--------------')
+
+    if added_epochs > 0:
+        start_epoch = 0
+    
     for epoch in range(start_epoch, args["n_epoches"]):
         
         loss_x, loss_u, loss_c, mask_mean, num_pos, guess_label_acc, queue_feats, queue_probs, queue_ptr, prob_list = \
