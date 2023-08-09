@@ -17,6 +17,7 @@ from tabulate import tabulate
 import urllib
 
 import tarfile
+import shutil
 
 import sys
 
@@ -87,6 +88,7 @@ def unpackData(PATH):
         if ".tar.gz" not in filename:
             continue
         # open file
+        print(f"File: {filename}")
         file = tarfile.open(Path + filename)
         
         # extracting file
@@ -129,13 +131,12 @@ def main(args):
     if path[-1] != "/":
         path += "/"
 
-    answer = input("Continue?")
-    if answer.lower() in ["y","yes"]:
+    if ("liebschner" in path):
         downloadData(path)
         unpackData(path)
         moveData(path)
         downloadLabels(path)
-    elif answer.lower() in ["n","no"]:
+    else:
         return
 
 
