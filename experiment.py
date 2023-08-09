@@ -637,7 +637,7 @@ def one_run(dataManager, run_param):
         #for fold_idx in range(4):
 
             if os.path.isdir(f'{run_param["Parent_PATH"]}/SSL_Working'):
-            cleanTrainDir(f"{run_param["Parent_PATH"]}/SSL_Working")
+                cleanTrainDir(f"{run_param["Parent_PATH"]}/SSL_Working")
 
             if seed != "":
                 set_seed(seed, fold_idx, text="")
