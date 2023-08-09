@@ -171,7 +171,7 @@ def getExpertModelSSL_AL(dataManager, expert, labelerId, param=None, seed=None, 
         if learning_type == "ssl": #If the experts should be trained with ssl
             sslDataset = dataManager.getSSLDataset(seed)
             sslDataset.addNewLabels(all_data_filenames[list(indices_confidence)], fold, expert.labelerId)
-            emb_model, model = ssl.getExpertModelSSL(labelerId=expert.labelerId, sslDataset=sslDataset, seed=seed, fold_idx=fold, n_labeled=None, embedded_model=None, param=param, neptune_param=param["NEPTUNE"], added_epochs=(round+1)*3)
+            emb_model, model = ssl.getExpertModelSSL(labelerId=expert.labelerId, sslDataset=sslDataset, seed=seed, fold_idx=fold, n_labeled=None, embedded_model=None, param=param, neptune_param=param["NEPTUNE"], added_epochs=(round+1)*param["AL"]["SSL_EPOCHS"])
             expert.setModel(expert_module.SSLModel(emb_model, model), mod="SSL")
 
 
@@ -301,7 +301,7 @@ def getExpertModelsSSL_AL(dataManager, experts, param, seed, fold, learning_mod=
             if learning_type == "ssl": #If the experts should be trained with ssl
                 sslDataset = dataManager.getSSLDataset(seed)
                 sslDataset.addNewLabels(all_data_filenames[list(indices_qbq)], fold, labelerId)
-                emb_model, model = ssl.getExpertModelSSL(labelerId=labelerId, sslDataset=sslDataset, seed=seed, fold_idx=fold, n_labeled=None, embedded_model=None, param=param, neptune_param=param["NEPTUNE"], added_epochs=(round+1)*2)
+                emb_model, model = ssl.getExpertModelSSL(labelerId=labelerId, sslDataset=sslDataset, seed=seed, fold_idx=fold, n_labeled=None, embedded_model=None, param=param, neptune_param=param["NEPTUNE"], added_epochs=(round+1)*param["AL"]["SSL_EPOCHS"])
                 experts[labelerId].setModel(expert_module.SSLModel(emb_model, model), mod="SSL")
 
 
@@ -345,7 +345,6 @@ def getExpertModelsSSL_AL(dataManager, experts, param, seed, fold, learning_mod=
         metrics[labelerId]["Test"]["End"] = met
         
     return met_test, metrics
-
 
 # In[7]:
 
@@ -882,20 +881,23 @@ def main(args):
 
     path = args[0]
 
+    if "liebschner" not in path:
+        return
+
     param = {
         "PATH": f"{path}/Datasets/NIH/",
         "Parent_PATH": path,
         "TARGET": "Airspace_Opacity",
         "LABELER_IDS": [[4323195249, 4295232296]],
         "K": 10, #Number of folds
-        "SEEDS": [1, 2, 3], #Seeds for the experiments
+        "SEEDS": [1, 2, 3, 4, 42], #Seeds for the experiments
         "GT": True, # Determines if the classifier gets all data with GT Label or only the labeld data
         "MOD": ["confidence", "disagreement", "disagreement_diff", "ssl", "normal"], #Determines the experiment modus
 
         "OVERLAP": [0, 100],
         "SAMPLE_EQUAL": [False, True],
 
-        "SETTING": ["AL", "SSL", "SSL_AL", "NORMAL"],
+        "SETTING": ["AL", "SSL", "SSL_AL", "NORMAL", "SSL_AL_SSL"],
 
         "NUM_EXPERTS": 2,
         "NUM_CLASSES": 2,
@@ -903,7 +905,7 @@ def main(args):
         "EXPERT_PREDICT": ["right", "target"],
 
         "AL": { #Parameter for Active Learning
-            "INITIAL_SIZE": [8, 16, 32], #
+            "INITIAL_SIZE": [4, 8, 16, 32], #
             "EPOCH_TRAIN": 40, #
             "n_dataset": 2, #Number Classes
             "BATCH_SIZE": 4,
@@ -915,6 +917,7 @@ def main(args):
             #"TRAIN REJECTOR": False,
             "PRELOAD": True,
             "PREPROCESS": True,
+            "SSL_EPOCHS": 3
         
         },
         "SSL": {
