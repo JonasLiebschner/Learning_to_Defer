@@ -717,6 +717,8 @@ def one_run(dataManager, run_param):
 def run_experiment(param):
     run_param = copy.deepcopy(param)
 
+    runs = None
+
     expert_metrics_all = []
 
     #with open('Metrics_Folder/Metrics_97.pickle', 'rb') as handle:
@@ -804,8 +806,9 @@ def run_experiment(param):
                                                 metrics_save["sample_equal"] = sample_equal
                                                 metrics_save["epochs_pretrain"] = epochs_pretrain
 
-                                                if metrics_save in runs:
-                                                    continue
+                                                if runs is not None:
+                                                    if metrics_save in runs:
+                                                        continue
                                     
                             
                                                 NEPTUNE = param["NEPTUNE"]["NEPTUNE"]
