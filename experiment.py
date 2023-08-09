@@ -637,7 +637,7 @@ def one_run(dataManager, run_param):
         #for fold_idx in range(4):
 
             if os.path.isdir(f'{run_param["Parent_PATH"]}/SSL_Working'):
-                cleanTrainDir(f"{run_param["Parent_PATH"]}/SSL_Working")
+                cleanTrainDir(f'{run_param["Parent_PATH"]}/SSL_Working')
 
             if seed != "":
                 set_seed(seed, fold_idx, text="")
@@ -646,7 +646,7 @@ def one_run(dataManager, run_param):
             print(f"Seed: {seed} - Fold: {fold_idx} \n")
 
             if os.path.isdir(f'{run_param["Parent_PATH"]}/SSL_Working/NIH/EmbeddingCM_bin'):
-                cleanTrainDir(f"{run_param["Parent_PATH"]}SSL_Working/NIH/EmbeddingCM_bin")
+                cleanTrainDir(f'{run_param["Parent_PATH"]}SSL_Working/NIH/EmbeddingCM_bin')
 
             neptune = {
                 "SEED": seed,
