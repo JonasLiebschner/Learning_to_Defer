@@ -639,7 +639,7 @@ def one_run(dataManager, run_param):
         hemmer_metrics[seed] = {}
 
         for fold_idx in range(run_param["K"]):
-        #for fold_idx in range(1):
+        #for fold_idx in range(2):
 
             if os.path.isdir(f'{run_param["Parent_PATH"]}/SSL_Working'):
                 cleanTrainDir(f'{run_param["Parent_PATH"]}/SSL_Working')
@@ -911,8 +911,7 @@ def main(args):
         "TARGET": "Airspace_Opacity",
         "LABELER_IDS": [[4323195249, 4295232296]],
         "K": 10, #Number of folds
-        #"SEEDS": [1, 2, 3, 4, 42], #Seeds for the experiments
-        "SEEDS": [1],
+        "SEEDS": [1, 2, 3, 4, 42], #Seeds for the experiments
         "GT": True, # Determines if the classifier gets all data with GT Label or only the labeld data
         "MOD": ["confidence", "disagreement", "disagreement_diff", "ssl", "normal"], #Determines the experiment modus
 
@@ -987,7 +986,7 @@ def main(args):
         "batch_size": 64,
         "alpha": 1.0, #scaling parameter for the loss function, default=1.0
         "epochs": 50,
-        "patience": 25, #number of patience steps for early stopping the training
+        "patience": 35, #number of patience steps for early stopping the training
         "expert_type": "MLPMixer", #specify the expert type. For the type of experts available, see-> models -> experts. defualt=predict
         "n_classes": 2, #K for K class classification
         "k": 0, #
