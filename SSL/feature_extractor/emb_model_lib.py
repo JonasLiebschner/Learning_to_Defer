@@ -45,9 +45,12 @@ class EmbeddingModel:
         self.global_step = 0
         self.args = args
         self.writer = writer
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.train_dir = get_train_dir(wkdir, args, 'emb_net')
         self.model = self.get_model()
+        if torch.cuda.device_count() > 1:
+            print("Use ", torch.cuda.device_count(), "GPUs!")
+            self.model = nn.DataParallel(self.model)
         self.optimizer = torch.optim.SGD(self.model.parameters(), lr=args['lr'], weight_decay=5e-4, momentum=0.9,
                                          nesterov=True)
         self.scheduler = torch.optim.lr_scheduler.MultiStepLR(self.optimizer, [60, 120, 160], gamma=0.2)

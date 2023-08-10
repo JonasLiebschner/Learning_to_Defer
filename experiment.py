@@ -607,6 +607,9 @@ def L2D_Verma(train_loader, val_loader, test_loader, full_dataloader, expert_fns
     num_experts = len(expert_fns)
             
     model = model = vres.ResNet50_defer(int(param["n_classes"]) + num_experts)
+    if torch.cuda.device_count() > 1:
+        print("Use ", torch.cuda.device_count(), "GPUs!")
+        model = nn.DataParallel(model)
 
     metrics_train_all, metrics_val_all, metrics_test, metrics_full, metrics_pretrain_all = verm.train(model, train_loader, val_loader, test_loader, expert_fns, param, seed=seed, experts=experts, 
                                                                                 fold=fold_idx, full_dataloader=full_dataloader, param=param)
@@ -706,7 +709,7 @@ def one_run(dataManager, run_param):
                 "full": all_full_metrics,
             }
 
-            
+
     return expert_metrics, verma_metrics, hemmer_metrics
             
 
@@ -721,10 +724,15 @@ def run_experiment(param):
 
     expert_metrics_all = []
 
-    #with open('Metrics_Folder/Metrics_97.pickle', 'rb') as handle:
-    #    expert_metrics_all = pickle.load(handle)
+    list_of_files = glob.glob(f'{param["Parent_PATH"]}/Metrics_Folderpath/*') # * means all if need specific format then *.csv
+    latest_file = max(list_of_files, key=os.path.getctime)
 
-    #runs = [{i:run[i] for i in run if i not in ["expert metrics", "verma", "hemmer"]} for run in expert_metrics_all]
+    print(f"Open metrics file: {latest_file}")
+
+    with open(latest_file, 'rb') as handle:
+        expert_metrics_all = pickle.load(handle)
+
+    runs = [{i:run[i] for i in run if i not in ["expert metrics", "verma", "hemmer"]} for run in expert_metrics_all]
 
     count = 0
 
@@ -987,16 +995,4 @@ def main(args):
 if __name__ == "__main__":
     main(sys.argv[1:])
 
-# In[ ]:
-
-
-
-
-# Store data (serialize)
-#with open('Metrics.pickle', 'wb') as handle:
-#    pickle.dump(expert_metrics_all, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-# Load data (deserialize)
-#with open('filename.pickle', 'rb') as handle:
-#    unserialized_data = pickle.load(handle)
 

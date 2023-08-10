@@ -118,7 +118,11 @@ def set_model(args):
     model = LinearNN(num_classes=args["n_classes"], feature_dim=feature_dim, proj=True)
 
     model.train()
-    model.cuda()  
+    model.cuda() 
+
+    if torch.cuda.device_count() > 1:
+        print("Use ", torch.cuda.device_count(), "GPUs!")
+        model = nn.DataParallel(model)
     
     if args["eval_ema"]:
         ema_model = LinearNN(num_classes=args["n_classes"], feature_dim=feature_dim, proj=True)
@@ -127,6 +131,10 @@ def set_model(args):
             param_k.requires_grad = False  # not update by gradient for eval_net
         ema_model.cuda()  
         ema_model.eval()
+
+        if torch.cuda.device_count() > 1:
+            print("Use ", torch.cuda.device_count(), "GPUs!")
+            ema_model = nn.DataParallel(ema_model)
     else:
         ema_model = None
         
@@ -197,7 +205,6 @@ def train_one_epoch(epoch,
     
     epoch_start = time.time()  # start time
     dl_x, dl_u = iter(dltrain_x), iter(dltrain_u)
-    count = 0
     for it in range(n_iters):
         ims_x_weak, lbs_x, im_id = next(dl_x)
         (ims_u_weak, ims_u_strong0, ims_u_strong1), lbs_u_real, im_id = next(dl_u)
@@ -213,9 +220,6 @@ def train_one_epoch(epoch,
         embedding = emb_model.get_embedding(batch=imgs)
 
         logits, features = model(embedding)
-
-        if torch.isnan(logits).any():
-            print(logits)
 
         """logits_x = logits[:bt]
         logits_u_w, logits_u_s0, logits_u_s1 = torch.split(logits[bt:], btu)

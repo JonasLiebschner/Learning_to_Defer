@@ -89,7 +89,7 @@ class NIHDataset:
 
         self.images = []
 
-        #self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        #self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.device = None
         
         self.preload = preload
@@ -162,7 +162,7 @@ class NIHDataset:
         """
         #print("transformed")
         if self.device is None:
-            self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         return self.tfms(image)#.to(self.device)
         
     def __getitem__(self, index: int) -> Tuple[Any, Any]:

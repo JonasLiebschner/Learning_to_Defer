@@ -34,6 +34,9 @@ class EmbeddingModel:
         self.type = type
         self.device = get_device()
         self.emb_model = self.get_emb_model(os.getcwd())
+        if torch.cuda.device_count() > 1:
+            print("Use ", torch.cuda.device_count(), "GPUs!")
+            self.emb_model = nn.DataParallel(self.emb_model)
 
     def get_emb_model(self, wkdir):
         """Initialize base model
