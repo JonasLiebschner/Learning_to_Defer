@@ -270,11 +270,16 @@ def train_one_epoch(epoch, feature_extractor, classifier, allocation_system, tra
         batch_targets = batch_targets.to(device)
         batch_input = batch_input.to(device)
 
-        expert_batch_preds = np.empty((param["NUM_EXPERTS"], len(batch_targets)))
-        for idx, expert_fn in enumerate(expert_fns):
-            expert_batch_preds[idx] = np.array(expert_fn(batch_input, batch_targets, batch_filenames))
+        #expert_batch_preds = np.empty((param["NUM_EXPERTS"], len(batch_targets)))
+        #for idx, expert_fn in enumerate(expert_fns):
+        #    expert_batch_preds[idx] = np.array(expert_fn(batch_input, batch_targets, batch_filenames))
 
-        batch_features = feature_extractor(batch_input.to(device))
+        # Compute expert predictions
+        expert_batch_preds = [np.array(expert_fn(batch_input, batch_targets, batch_filenames)) for expert_fn in expert_fns]
+        expert_batch_preds = np.array(expert_batch_preds)  # Combine into a numpy array
+
+        with torch.no_grad():
+            batch_features = feature_extractor(batch_input)
         batch_outputs_classifier = classifier(batch_features)
         batch_outputs_allocation_system = allocation_system(batch_features)
 

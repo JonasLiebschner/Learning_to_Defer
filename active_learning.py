@@ -444,8 +444,8 @@ def getExpertModels(indices, experts, train_dataset, val_dataset, test_dataset, 
         dataset_val_unlabeled = NIHExpertDatasetMemory(None, val_dataset.getAllFilenames(), np.array(val_dataset.getAllTargets()), expert.predict , [1]*len(val_dataset.getAllIndices()), 
                                                        val_dataset.getAllIndices(), param=param, preload=param_al["PRELOAD"], image_container=image_container)
 
-        dataLoaderTrainLabeled = DataLoader(dataset=dataset_train_labeled, batch_size=param_al["BATCH_SIZE"], shuffle=True, num_workers=4, pin_memory=True)
-        dataLoaderValUnlabeled = DataLoader(dataset=dataset_val_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=4, pin_memory=True)
+        dataLoaderTrainLabeled = DataLoader(dataset=dataset_train_labeled, batch_size=param_al["BATCH_SIZE"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
+        dataLoaderValUnlabeled = DataLoader(dataset=dataset_val_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
 
         gc.collect()
         
@@ -481,7 +481,7 @@ def getExpertModels(indices, experts, train_dataset, val_dataset, test_dataset, 
 
     dataset_train_unlabeled = NIHExpertDatasetMemory(None, all_data_filenames[indices_unlabeled], all_data_y[indices_unlabeled], None , [0]*len(indices_unlabeled), 
                                                      indices_unlabeled, param=param, preload=param_al["PRELOAD"], image_container=image_container)
-    dataLoaderTrainUnlabeled = DataLoader(dataset=dataset_train_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=4, pin_memory=True)
+    dataLoaderTrainUnlabeled = DataLoader(dataset=dataset_train_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
     
     for round in range(param_al["ROUNDS"]):
 
@@ -506,8 +506,8 @@ def getExpertModels(indices, experts, train_dataset, val_dataset, test_dataset, 
                                                            [1]*len(val_dataset.getAllIndices()), val_dataset.getAllIndices(), param=param, preload=param_al["PRELOAD"], 
                                                            image_container=image_container)
 
-            dataLoaderTrainLabeled = DataLoader(dataset=dataset_train_labeled, batch_size=param_al["BATCH_SIZE"], shuffle=True, num_workers=4, pin_memory=True)
-            dataLoaderValUnlabeled = DataLoader(dataset=dataset_val_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=4, pin_memory=True)
+            dataLoaderTrainLabeled = DataLoader(dataset=dataset_train_labeled, batch_size=param_al["BATCH_SIZE"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
+            dataLoaderValUnlabeled = DataLoader(dataset=dataset_val_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
 
             dataloaders = (dataLoaderTrainLabeled, dataLoaderValUnlabeled)
             n_images = param_al["INITIAL_SIZE"] + (round+1)*param_al["LABELS_PER_ROUND"]
@@ -521,12 +521,12 @@ def getExpertModels(indices, experts, train_dataset, val_dataset, test_dataset, 
         
         dataset_train_unlabeled = NIHExpertDatasetMemory(None, all_data_filenames[indices_unlabeled], all_data_y[indices_unlabeled], None , [0]*len(indices_unlabeled), 
                                                          indices_unlabeled, param=param, preload=param_al["PRELOAD"], image_container=image_container)
-        dataLoaderTrainUnlabeled = DataLoader(dataset=dataset_train_unlabeled, batch_size=param_al["BATCH_SIZE"], shuffle=True, num_workers=4, pin_memory=True)
+        dataLoaderTrainUnlabeled = DataLoader(dataset=dataset_train_unlabeled, batch_size=param_al["BATCH_SIZE"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
 
     
     dataset_test_unlabeled = NIHExpertDatasetMemory(None, test_dataset.getAllFilenames(), np.array(test_dataset.getAllTargets()), expert.predict , [1]*len(test_dataset.getAllIndices()), 
                                                     test_dataset.getAllIndices(), param=param, preload=param_al["PRELOAD"], image_container=image_container)
-    dataLoaderVal = DataLoader(dataset=dataset_test_unlabeled, batch_size=param_al["BATCH_SIZE"], shuffle=True, num_workers=4, pin_memory=True)
+    dataLoaderVal = DataLoader(dataset=dataset_test_unlabeled, batch_size=param_al["BATCH_SIZE"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
     met_test = {}
     for labelerId, expert in experts.items():
         temp = metrics_print_expert(expert_models[labelerId], dataLoaderVal, id=expert.labelerId, seed=seed, fold=fold, 
@@ -567,9 +567,9 @@ def getExpertModel(indices, train_dataset, val_dataset, test_dataset, expert, pa
                                                    val_dataset.getAllIndices(), param=param, preload=param_al["PRELOAD"], image_container=image_container)
     
     # Lädt die Dataloaders
-    dataLoaderTrainLabeled = DataLoader(dataset=dataset_train_labeled, batch_size=param_al["BATCH_SIZE"], shuffle=True, num_workers=4, pin_memory=True)
-    dataLoaderTrainUnlabeled = DataLoader(dataset=dataset_train_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=4, pin_memory=True)    
-    dataLoaderValUnlabeled = DataLoader(dataset=dataset_val_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=4, pin_memory=True)
+    dataLoaderTrainLabeled = DataLoader(dataset=dataset_train_labeled, batch_size=param_al["BATCH_SIZE"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
+    dataLoaderTrainUnlabeled = DataLoader(dataset=dataset_train_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)    
+    dataLoaderValUnlabeled = DataLoader(dataset=dataset_val_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
     
     # train expert model on labeled data
     #model_expert = NetSimple(2, 3, 100, 100, 1000,500).to(device)
@@ -614,8 +614,8 @@ def getExpertModel(indices, train_dataset, val_dataset, test_dataset, expert, pa
                                                          indices_unlabeled, param=param, preload=param_al["PRELOAD"], image_container=image_container)
 
         
-        dataLoaderTrainLabeled = DataLoader(dataset=dataset_train_labeled, batch_size=param_al["BATCH_SIZE"], shuffle=True, num_workers=4, pin_memory=True)
-        dataLoaderTrainUnlabeled = DataLoader(dataset=dataset_train_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=4, pin_memory=True)
+        dataLoaderTrainLabeled = DataLoader(dataset=dataset_train_labeled, batch_size=param_al["BATCH_SIZE"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
+        dataLoaderTrainUnlabeled = DataLoader(dataset=dataset_train_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
 
         
         # train model on labeled data
@@ -632,7 +632,7 @@ def getExpertModel(indices, train_dataset, val_dataset, test_dataset, expert, pa
 
     dataset_test_unlabeled = NIHExpertDatasetMemory(None, test_dataset.getAllFilenames(), np.array(test_dataset.getAllTargets()), expert.predict , [1]*len(test_dataset.getAllIndices()), 
                                                     test_dataset.getAllIndices(), param=param, preload=param_al["PRELOAD"], image_container=image_container)
-    dataLoaderVal = DataLoader(dataset=dataset_test_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=4, pin_memory=True)
+    dataLoaderVal = DataLoader(dataset=dataset_test_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
     met_test = metrics_print_expert(model_expert, dataLoaderVal, id=expert.labelerId, seed=seed, fold=fold, 
                                n_images=param_al["INITIAL_SIZE"] + param_al["ROUNDS"]*param_al["LABELS_PER_ROUND"], step="Test", mod=learning_mod, prediction_type=prediction_type, param=param)
 
@@ -668,8 +668,8 @@ def getExpertModelNormal(indices, train_dataset, val_dataset, test_dataset, expe
                                                    val_dataset.getAllIndices(), param=param, preload=param_al["PRELOAD"], image_container=image_container)
     
     # Lädt die Dataloaders
-    dataLoaderTrainLabeled = DataLoader(dataset=dataset_train_labeled, batch_size=param_al["BATCH_SIZE"], shuffle=True, num_workers=4, pin_memory=True)    
-    dataLoaderValUnlabeled = DataLoader(dataset=dataset_val_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=4, pin_memory=True)
+    dataLoaderTrainLabeled = DataLoader(dataset=dataset_train_labeled, batch_size=param_al["BATCH_SIZE"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)    
+    dataLoaderValUnlabeled = DataLoader(dataset=dataset_val_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
     
     # train expert model on labeled data
     #model_expert = NetSimple(2, 3, 100, 100, 1000,500).to(device)
@@ -692,7 +692,7 @@ def getExpertModelNormal(indices, train_dataset, val_dataset, test_dataset, expe
 
     dataset_test_unlabeled = NIHExpertDatasetMemory(None, test_dataset.getAllFilenames(), np.array(test_dataset.getAllTargets()), expert.predict , [1]*len(test_dataset.getAllIndices()), 
                                                     test_dataset.getAllIndices(), param=param, preload=param_al["PRELOAD"], image_container=image_container)
-    dataLoaderVal = DataLoader(dataset=dataset_test_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=4, pin_memory=True)
+    dataLoaderVal = DataLoader(dataset=dataset_test_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
     met_test = metrics_print_expert(model_expert, dataLoaderVal, id=expert.labelerId, seed=seed, fold=fold, 
                                n_images=param["LABELED"], step="Test", mod=learning_mod, prediction_type=prediction_type, param=param)
 
@@ -950,7 +950,7 @@ def testExpert(expert, dataset, image_container, param, mod, prediction_type, se
     final_dataset = NIHExpertDatasetMemory(None, dataset.getAllFilenames(), np.array(dataset.getAllTargets()), expert.predict , [1]*len(dataset.getAllIndices()), 
                                                        dataset.getAllIndices(), param=param, preload=True, image_container=image_container)
 
-    data_loader = DataLoader(dataset=final_dataset, batch_size=128, shuffle=True, num_workers=4, pin_memory=True)
+    data_loader = DataLoader(dataset=final_dataset, batch_size=128, shuffle=True, num_workers=param["num_worker"], pin_memory=True)
 
     if param["NEPTUNE"]["NEPTUNE"]:
         run = param["NEPTUNE"]["RUN"]

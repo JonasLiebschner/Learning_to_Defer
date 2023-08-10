@@ -57,6 +57,8 @@ import neptune
 import json
 import shutil
 
+import glob
+
 
 # In[2]:
 
@@ -150,8 +152,8 @@ def getExpertModelSSL_AL(dataManager, expert, labelerId, param=None, seed=None, 
     dataset_val_unlabeled = NIHExpertDatasetMemory(None, val_dataset.getAllFilenames(), np.array(val_dataset.getAllTargets()), expert.predict , [1]*len(val_dataset.getAllIndices()), val_dataset.getAllIndices(), param=param, preload=param["AL"]["PRELOAD"], image_container=image_container)
     
     # Lädt die Dataloaders
-    dataLoaderTrainUnlabeled = DataLoader(dataset=dataset_train_unlabeled, batch_size=param["AL"]["BATCH_SIZE"], shuffle=True, num_workers=4, pin_memory=True)
-    dataLoaderValUnlabeled = DataLoader(dataset=dataset_val_unlabeled, batch_size=param["AL"]["BATCH_SIZE"], shuffle=True, num_workers=4, pin_memory=True)
+    dataLoaderTrainUnlabeled = DataLoader(dataset=dataset_train_unlabeled, batch_size=param["AL"]["BATCH_SIZE"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
+    dataLoaderValUnlabeled = DataLoader(dataset=dataset_val_unlabeled, batch_size=param["AL"]["BATCH_SIZE"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
     
     for round in range(param["AL"]["ROUNDS"]):
 
@@ -165,8 +167,8 @@ def getExpertModelSSL_AL(dataManager, expert, labelerId, param=None, seed=None, 
         dataset_train_labeled = NIHExpertDatasetMemory(None, all_data_filenames[indices_labeled], all_data_y[indices_labeled], expert.predict , [1]*len(indices_labeled), indices_labeled, param=param, preload=param["AL"]["PRELOAD"], image_container=image_container)
         dataset_train_unlabeled = NIHExpertDatasetMemory(None, all_data_filenames[indices_unlabeled], all_data_y[indices_unlabeled], expert.predict , [0]*len(indices_unlabeled), indices_unlabeled, param=param, preload=param["AL"]["PRELOAD"], image_container=image_container)
 
-        dataLoaderTrainLabeled = DataLoader(dataset=dataset_train_labeled, batch_size=param["AL"]["BATCH_SIZE"], shuffle=True, num_workers=4, pin_memory=True)
-        dataLoaderTrainUnlabeled = DataLoader(dataset=dataset_train_unlabeled, batch_size=param["AL"]["BATCH_SIZE"], shuffle=True, num_workers=4, pin_memory=True)
+        dataLoaderTrainLabeled = DataLoader(dataset=dataset_train_labeled, batch_size=param["AL"]["BATCH_SIZE"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
+        dataLoaderTrainUnlabeled = DataLoader(dataset=dataset_train_unlabeled, batch_size=param["AL"]["BATCH_SIZE"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
 
         if learning_type == "ssl": #If the experts should be trained with ssl
             sslDataset = dataManager.getSSLDataset(seed)
@@ -199,7 +201,7 @@ def getExpertModelSSL_AL(dataManager, expert, labelerId, param=None, seed=None, 
             }
     
     dataset_test_unlabeled = NIHExpertDatasetMemory(None, test_dataset.getAllFilenames(), np.array(test_dataset.getAllTargets()), expert.predict , [1]*len(test_dataset.getAllIndices()), test_dataset.getAllIndices(), param=param, preload=param["AL"]["PRELOAD"], image_container=image_container)
-    dataLoaderVal = DataLoader(dataset=dataset_test_unlabeled, batch_size=param["AL"]["BATCH_SIZE"], shuffle=True, num_workers=4, pin_memory=True)
+    dataLoaderVal = DataLoader(dataset=dataset_test_unlabeled, batch_size=param["AL"]["BATCH_SIZE"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
     met_test = al.metrics_print_expert(model=None, expert=expert, data_loader=dataLoaderVal, id=expert.labelerId, seed=seed, fold=fold, n_images=param["AL"]["INITIAL_SIZE"] + param["AL"]["ROUNDS"]*param["AL"]["LABELS_PER_ROUND"], step="Test", param=param, mod="ssl", prediction_type="target")
 
     met = al.testExpert(expert, val_dataset, image_container, param, learning_mod, prediction_type, seed, fold, data_name="Val")
@@ -271,7 +273,7 @@ def getExpertModelsSSL_AL(dataManager, experts, param, seed, fold, learning_mod=
     indices_labeled = list(set(all_indices) - set(indices_unlabeled))
 
     dataset_train_unlabeled = NIHExpertDatasetMemory(None, all_data_filenames[indices_unlabeled], all_data_y[indices_unlabeled], experts[param["LABELER_IDS"][0]].predict , [0]*len(indices_unlabeled), indices_unlabeled, param=param, preload=param["AL"]["PRELOAD"], image_container=image_container)
-    dataLoaderTrainUnlabeled = DataLoader(dataset=dataset_train_unlabeled, batch_size=param["AL"]["BATCH_SIZE"], shuffle=True, num_workers=4, pin_memory=True)
+    dataLoaderTrainUnlabeled = DataLoader(dataset=dataset_train_unlabeled, batch_size=param["AL"]["BATCH_SIZE"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
     
     for round in range(param["AL"]["ROUNDS"]):
 
@@ -292,11 +294,11 @@ def getExpertModelsSSL_AL(dataManager, experts, param, seed, fold, learning_mod=
 
             #Val Dataset, needed for SSL and AL
             dataset_val_unlabeled = NIHExpertDatasetMemory(None, val_dataset.getAllFilenames(), np.array(val_dataset.getAllTargets()), expert.predict , [1]*len(val_dataset.getAllIndices()), val_dataset.getAllIndices(), param=param, preload=param["AL"]["PRELOAD"], image_container=image_container)
-            dataLoaderValUnlabeled = DataLoader(dataset=dataset_val_unlabeled, batch_size=param["AL"]["BATCH_SIZE"], shuffle=True, num_workers=4, pin_memory=True)
+            dataLoaderValUnlabeled = DataLoader(dataset=dataset_val_unlabeled, batch_size=param["AL"]["BATCH_SIZE"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
 
             #Create train dataset
             dataset_train_labeled = NIHExpertDatasetMemory(None, all_data_filenames[indices_labeled], all_data_y[indices_labeled], expert.predict , [1]*len(indices_labeled), indices_labeled, param=param, preload=param["AL"]["PRELOAD"], image_container=image_container)
-            dataLoaderTrainLabeled = DataLoader(dataset=dataset_train_labeled, batch_size=param["AL"]["BATCH_SIZE"], shuffle=True, num_workers=4, pin_memory=True)
+            dataLoaderTrainLabeled = DataLoader(dataset=dataset_train_labeled, batch_size=param["AL"]["BATCH_SIZE"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
 
             if learning_type == "ssl": #If the experts should be trained with ssl
                 sslDataset = dataManager.getSSLDataset(seed)
@@ -329,10 +331,10 @@ def getExpertModelsSSL_AL(dataManager, experts, param, seed, fold, learning_mod=
                 }
         
         dataset_train_unlabeled = NIHExpertDatasetMemory(None, all_data_filenames[indices_unlabeled], all_data_y[indices_unlabeled], expert.predict , [0]*len(indices_unlabeled), indices_unlabeled, param=param, preload=param["AL"]["PRELOAD"], image_container=image_container)
-        dataLoaderTrainUnlabeled = DataLoader(dataset=dataset_train_unlabeled, batch_size=param["AL"]["BATCH_SIZE"], shuffle=True, num_workers=4, pin_memory=True)
+        dataLoaderTrainUnlabeled = DataLoader(dataset=dataset_train_unlabeled, batch_size=param["AL"]["BATCH_SIZE"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
     
     dataset_test_unlabeled = NIHExpertDatasetMemory(None, test_dataset.getAllFilenames(), np.array(test_dataset.getAllTargets()), expert.predict , [1]*len(test_dataset.getAllIndices()), test_dataset.getAllIndices(), param=param, preload=param["AL"]["PRELOAD"], image_container=image_container)
-    dataLoaderVal = DataLoader(dataset=dataset_test_unlabeled, batch_size=param["AL"]["BATCH_SIZE"], shuffle=True, num_workers=4, pin_memory=True)
+    dataLoaderVal = DataLoader(dataset=dataset_test_unlabeled, batch_size=param["AL"]["BATCH_SIZE"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
     met_test = {}
     for labelerId, expert in experts.items():
         temp = al.metrics_print_expert(model=None, expert=expert, data_loader=dataLoaderVal, id=expert.labelerId, seed=seed, fold=fold, n_images=param["AL"]["INITIAL_SIZE"] + param["AL"]["ROUNDS"]*param["AL"]["LABELS_PER_ROUND"], step="Test", param=param, mod="ssl", prediction_type="target")
@@ -637,7 +639,7 @@ def one_run(dataManager, run_param):
         hemmer_metrics[seed] = {}
 
         for fold_idx in range(run_param["K"]):
-        #for fold_idx in range(4):
+        #for fold_idx in range(1):
 
             if os.path.isdir(f'{run_param["Parent_PATH"]}/SSL_Working'):
                 cleanTrainDir(f'{run_param["Parent_PATH"]}/SSL_Working')
@@ -724,7 +726,7 @@ def run_experiment(param):
 
     expert_metrics_all = []
 
-    list_of_files = glob.glob(f'{param["Parent_PATH"]}/Metrics_Folderpath/*') # * means all if need specific format then *.csv
+    list_of_files = glob.glob(f'{param["Parent_PATH"]}/Metrics_Folder/*') # * means all if need specific format then *.csv
     latest_file = max(list_of_files, key=os.path.getctime)
 
     print(f"Open metrics file: {latest_file}")
@@ -734,7 +736,11 @@ def run_experiment(param):
 
     runs = [{i:run[i] for i in run if i not in ["expert metrics", "verma", "hemmer"]} for run in expert_metrics_all]
 
-    count = 0
+    if latest_file[0] != "M":
+        latest_file = "Metrics_0.pickle"
+
+    count = int(latest_file[8:-7]) + 1
+    print(count)
 
     #Every pair of labeler ids
     for labeler_ids in param["LABELER_IDS"]:
@@ -883,7 +889,7 @@ def convert_list_to_string(li):
     return 
 
 
-#CUDA_LAUNCH_BLOCKING=1
+CUDA_LAUNCH_BLOCKING=1
 torch.backends.cudnn.benchmark = True
 
 
@@ -892,7 +898,11 @@ def main(args):
 
     path = args[0]
 
-    if "liebschner" not in path:
+    num_worker = 4
+    if len(args) >= 2:
+        num_worker = int(args[1])
+
+    if "liebschner" not in path and "joli" not in path:
         return
 
     param = {
@@ -901,7 +911,8 @@ def main(args):
         "TARGET": "Airspace_Opacity",
         "LABELER_IDS": [[4323195249, 4295232296]],
         "K": 10, #Number of folds
-        "SEEDS": [1, 2, 3, 4, 42], #Seeds for the experiments
+        #"SEEDS": [1, 2, 3, 4, 42], #Seeds for the experiments
+        "SEEDS": [1],
         "GT": True, # Determines if the classifier gets all data with GT Label or only the labeld data
         "MOD": ["confidence", "disagreement", "disagreement_diff", "ssl", "normal"], #Determines the experiment modus
 
@@ -988,6 +999,7 @@ def main(args):
         "loss_type": "ova",
         "ckp_dir": f"{path}/Models", #directory name to save the checkpoints
         "experiment_name": "multiple_experts", #specify the experiment name. Checkpoints will be saved with this name
+        "num_worker": num_worker,
     }
 
     expert_metrics_all = run_experiment(param)

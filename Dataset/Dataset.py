@@ -237,7 +237,7 @@ class NIH_K_Fold_Dataloader:
         self.param = param
         self.prebuild = prebuild
 
-        self.num_workers = 4
+        self.num_workers = param["num_worker"]
 
         #TODO: Implement support for non overlapping Labels
 
@@ -627,7 +627,7 @@ class SSLDataset():
         self.preload = False
         self.preprocess = False
 
-        self.num_workers = 4
+        self.num_workers = param["num_worker"]
         
         self.unpack_param()
         self.setup()
@@ -946,7 +946,7 @@ class SSLDataset():
         dl_x = torch.utils.data.DataLoader(
             ds_x,
             batch_sampler=batch_sampler_x,
-            num_workers=4,
+            num_workers=self.num_workers,
             pin_memory=False
         )
         if data_u is None:
@@ -964,7 +964,7 @@ class SSLDataset():
             dl_u = torch.utils.data.DataLoader(
                 ds_u,
                 batch_sampler=batch_sampler_u,
-                num_workers=4,
+                num_workers=self.num_workers,
                 pin_memory=False
             )
             return dl_x, dl_u
@@ -995,7 +995,7 @@ class SSLDataset():
             shuffle=False,
             batch_size=batch_size,
             drop_last=False,
-            num_workers=num_workers,
+            num_workers=self.num_workers,
             pin_memory=pin_memory
         )
         return dl
@@ -1026,7 +1026,7 @@ class SSLDataset():
             shuffle=False,
             batch_size=batch_size,
             drop_last=False,
-            num_workers=num_workers,
+            num_workers=self.num_workers,
             pin_memory=pin_memory
         )
         return dl

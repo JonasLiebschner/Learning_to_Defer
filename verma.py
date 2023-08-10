@@ -401,16 +401,20 @@ def evaluate(model, expert_fns, loss_fn, n_classes, data_loader, config, print_m
     alpha = config["alpha"]
     losses = []
     with torch.no_grad():
-        for data in data_loader:
-            images, labels, hpred = data
-            images, labels, hpred = images.to(device), labels.to(device), hpred
+        for images, labels, hpred in data_loader:
+            images, labels = images.to(device), labels.to(device)
+        #for data in data_loader:
+        #    images, labels, hpred = data
+        #    images, labels, hpred = images.to(device), labels.to(device), hpred
             outputs = model(images)
             if config["loss_type"] == "softmax":
                 outputs = F.softmax(outputs, dim=1)
             elif config["loss_type"] == "ova":
                 ouputs = F.sigmoid(outputs)
 
-            _, predicted = torch.max(outputs.data, 1)
+            _, predicted = torch.max(outputs, 1)
+            #_, predicted = torch.max(outputs.data, 1)
+            
             #batch_size = outputs.size()[0]  # batch_size
             batch_size = outputs.size(0)
 

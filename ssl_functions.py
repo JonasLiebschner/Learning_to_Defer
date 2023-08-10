@@ -1,6 +1,5 @@
 import sys, os
 
-from torch.utils.tensorboard import SummaryWriter
 from absl import flags
 from absl import app
 
@@ -454,8 +453,8 @@ def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded
         
         dltrain_x, dltrain_u = sslDataset.get_train_loader_interface( 
             exp, args["batchsize"], args["mu"], n_iters_per_epoch, L=args["n_labeled"], method='comatch')
-        dlval = sslDataset.get_val_loader_interface(exp, batch_size=64, num_workers=4, fold_idx=fold_idx)
-        dlval = sslDataset.get_test_loader_interface(exp, batch_size=64, num_workers=4, fold_idx=fold_idx)
+        dlval = sslDataset.get_val_loader_interface(exp, batch_size=64, num_workers=param["num_worker"], fold_idx=fold_idx)
+        dlval = sslDataset.get_test_loader_interface(exp, batch_size=64, num_workers=param["num_worker"], fold_idx=fold_idx)
 
     wd_params, non_wd_params = [], []
     for name, params in model.named_parameters():
