@@ -1,4 +1,4 @@
-import Verma.experts as vexp
+#import Verma.experts as vexp
 import Verma.losses as vlos
 from Verma.utils import AverageMeter, accuracy
 import Verma.resnet50 as vres
@@ -58,10 +58,52 @@ def train(model, train_loader, valid_loader, test_loader, expert_fns, config, se
     warmup_iters = config["warmup_epochs"] * len(train_loader)
     lrate = config["lr"]
 
+    metrics_pretrain_all = {}
     metrics_train_all = {}
     metrics_val_all = {}
     metrics_test_all = {}
     metrics_full_all = {}
+
+    for epoch in range(0, param["epochs_pretrain"]):
+        iters, train_loss = train_epoch(
+            iters,
+            warmup_iters,
+            lrate,
+            train_loader,
+            model,
+            optimizer,
+            scheduler,
+            epoch,
+            expert_fns,
+            loss_fn,
+            n_classes,
+            config["alpha"],
+            config,
+            classifier_only=True
+        )
+
+        experts_fns_eval = []
+        labelerIds = []
+        for labelerId, expert in experts.items():
+            experts_fns_eval.append(expert.predict)
+            labelerIds.append(labelerId)
+        #metrics = evaluate(model, expert_fns, loss_fn, n_classes, valid_loader, config)
+
+        metrics_pretrain = evaluate(model, experts_fns_eval, loss_fn, n_classes, train_loader, config, print_m=True)
+        if param["NEPTUNE"]["NEPTUNE"]:
+            run = param["NEPTUNE"]["RUN"]
+            run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Train/Classifier_only/system_accuracy"].append(metrics_pretrain["system_accuracy"])
+            run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Train/Classifier_only/expert_accuracy"].append(metrics_pretrain["expert_accuracy"])
+            run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Train/Classifier_only/classifier_accuracy"].append(metrics_pretrain["classifier_accuracy"])
+            run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Train/Classifier_only/alone_classifier"].append(metrics_pretrain["alone_classifier"])
+            run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Train/Classifier_only/validation_loss"].append(metrics_pretrain["validation_loss"])
+            run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Train/Classifier_only/cov_classifier"].append(metrics_pretrain["cov_classifier"])
+            for index in range(len(metrics_pretrain["cov_experts"])):
+                run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Train/Classifier_only/accuracy_expert_{labelerIds[index]}"].append(metrics_pretrain["acc_experts"][index])
+                run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Train/Classifier_only/cov_expert_{labelerIds[index]}"].append(metrics_pretrain["cov_experts"][index])
+                
+        metrics_pretrain_all[epoch] = metrics_pretrain
+    epoch = 0
 
     for epoch in range(0, config["epochs"]):
         iters, train_loss = train_epoch(
@@ -212,7 +254,7 @@ def train(model, train_loader, valid_loader, test_loader, expert_fns, config, se
                 run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Full/accuracy_expert_{labelerIds[index]}"].append(metrics_train["acc_experts"][index])
                 run[f"Seed_{seed}/Fold_{fold}/L2D/Verma/Full/cov_expert_{labelerIds[index]}"].append(metrics_train["cov_experts"][index])
         
-    return metrics_train_all, metrics_val_all, metrics_test_all, metrics_full_all
+    return metrics_train_all, metrics_val_all, metrics_test_all, metrics_full_all, metrics_pretrain_all
 
 def train_epoch(
     iters,
@@ -228,6 +270,7 @@ def train_epoch(
     n_classes,
     alpha,
     config,
+    classifier_only=False
 ):
     """ Train for one epoch """
     
@@ -249,6 +292,7 @@ def train_epoch(
             for param_group in optimizer.param_groups:
                 param_group["lr"] = lr
 
+        target_cpu = target
         target = target.to(device)
         input = input.to(device)
         hpred = hpred
@@ -271,12 +315,15 @@ def train_epoch(
             
             m2 = [0] * batch_size
             for j in range(0, batch_size):
-                if m[j] == target[j].item():
+                #if m[j] == target[j].item():
+                if m[j] == target[j]:
                     m[j] = 1
                     m2[j] = alpha
                 else:
                     m[j] = 0
                     m2[j] = 1
+                if classifier_only: #Set expert always to false, if only the classifier should be trained
+                    m[j] = 0
             m = torch.tensor(m, device=device)
             m2 = torch.tensor(m2, device=device)
             #m = m.to(device)
@@ -356,16 +403,21 @@ def evaluate(model, expert_fns, loss_fn, n_classes, data_loader, config, print_m
     alpha = config["alpha"]
     losses = []
     with torch.no_grad():
-        for data in data_loader:
-            images, labels, hpred = data
-            images, labels, hpred = images.to(device), labels.to(device), hpred
+        for images, labels, hpred in data_loader:
+            labels_cpu = labels
+            images, labels = images.to(device), labels.to(device)
+        #for data in data_loader:
+        #    images, labels, hpred = data
+        #    images, labels, hpred = images.to(device), labels.to(device), hpred
             outputs = model(images)
             if config["loss_type"] == "softmax":
                 outputs = F.softmax(outputs, dim=1)
             elif config["loss_type"] == "ova":
                 ouputs = F.sigmoid(outputs)
 
-            _, predicted = torch.max(outputs.data, 1)
+            _, predicted = torch.max(outputs, 1)
+            #_, predicted = torch.max(outputs.data, 1)
+            
             #batch_size = outputs.size()[0]  # batch_size
             batch_size = outputs.size(0)
 
@@ -377,7 +429,8 @@ def evaluate(model, expert_fns, loss_fn, n_classes, data_loader, config, print_m
                 m = [0] * batch_size
                 m2 = [0] * batch_size
                 for j in range(0, batch_size):
-                    if exp_prediction1[j] == labels[j].item():
+                    #if exp_prediction1[j] == labels[j].item():
+                    if exp_prediction1[j] == labels_cpu[j]:
                         m[j] = 1
                         m2[j] = alpha
                     else:

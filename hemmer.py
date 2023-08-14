@@ -67,7 +67,7 @@ def L2D_Hemmer(train_loader, val_loader, test_loader, full_dataloader, expert_fn
 def run_team_performance_optimization(method, seed, data_loaders, expert_fns, param=None, fold=None, experts=None):
     print(f'Team Performance Optimization with {method}')
     
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if method == "Joint Sparse Framework":
         loss_fn = joint_sparse_framework_loss
@@ -91,6 +91,11 @@ def run_team_performance_optimization(method, seed, data_loaders, expert_fns, pa
     classifier = Network(output_size=param["NUM_CLASSES"], softmax_sigmoid="softmax", param=param).to(device)
 
     allocation_system = Network(output_size=param["NUM_EXPERTS"] + 1, softmax_sigmoid=allocation_system_activation_function, param=param).to(device)
+
+    if torch.cuda.device_count() > 1:
+        print("Use ", torch.cuda.device_count(), "GPUs!")
+        classifier = nn.DataParallel(classifier)
+        allocation_system = nn.DataParallel(allocation_system)
 
     train_loader, val_loader, test_loader, full_loader = data_loaders
 
@@ -259,17 +264,22 @@ def train_one_epoch(epoch, feature_extractor, classifier, allocation_system, tra
     classifier.train()
     allocation_system.train()
     
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     for i, (batch_input, batch_targets, batch_filenames) in enumerate(train_loader):
         batch_targets = batch_targets.to(device)
         batch_input = batch_input.to(device)
 
-        expert_batch_preds = np.empty((param["NUM_EXPERTS"], len(batch_targets)))
-        for idx, expert_fn in enumerate(expert_fns):
-            expert_batch_preds[idx] = np.array(expert_fn(batch_input, batch_targets, batch_filenames))
+        #expert_batch_preds = np.empty((param["NUM_EXPERTS"], len(batch_targets)))
+        #for idx, expert_fn in enumerate(expert_fns):
+        #    expert_batch_preds[idx] = np.array(expert_fn(batch_input, batch_targets, batch_filenames))
 
-        batch_features = feature_extractor(batch_input.to(device))
+        # Compute expert predictions
+        expert_batch_preds = [np.array(expert_fn(batch_input, batch_targets, batch_filenames)) for expert_fn in expert_fns]
+        expert_batch_preds = np.array(expert_batch_preds)  # Combine into a numpy array
+
+        with torch.no_grad():
+            batch_features = feature_extractor(batch_input)
         batch_outputs_classifier = classifier(batch_features)
         batch_outputs_allocation_system = allocation_system(batch_features)
 
@@ -287,7 +297,7 @@ def evaluate_one_epoch(epoch, feature_extractor, classifier, allocation_system, 
     classifier.eval()
     allocation_system.eval()
     
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     classifier_outputs = torch.tensor([]).to(device)
     allocation_system_outputs = torch.tensor([]).to(device)
@@ -345,7 +355,7 @@ def joint_sparse_framework_loss(epoch, classifier_output, allocation_system_outp
 
     # loss for allocation system 
     
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # set up zero-initialized tensor to store weighted team predictions
     batch_size = len(targets)
@@ -391,7 +401,7 @@ def our_loss(epoch, classifier_output, allocation_system_output, expert_preds, t
     #   expert_preds: nxm matrix with expert predictions with n=number of experts, m=number of classes
     #   targets: targets as 1-dim vector with n length with n=batch_size
     
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     batch_size = len(targets)
     team_probs = torch.zeros((batch_size, param["NUM_CLASSES"])).to(classifier_output.device) # set up zero-initialized tensor to store team predictions

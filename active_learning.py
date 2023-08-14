@@ -28,7 +28,7 @@ from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 from PIL import Image
 
-import Verma.experts as vexp
+#import Verma.experts as vexp
 import Verma.losses as vlos
 from Verma.utils import AverageMeter, accuracy
 import Verma.resnet50 as vres
@@ -102,6 +102,8 @@ class NIHExpertDatasetMemory():
             self.indices = indices
         else:
             self.indices = np.array(list(range(len(self.targets))))
+
+        self.transformed_images = {}
             
     def loadImage(self, idx):
         """
@@ -139,21 +141,33 @@ class NIHExpertDatasetMemory():
 
     def transformImage(self, img):
         return self.transform_test(img)
+
+    def getTransformedImage(self, image, image_id):
+        """
+        Transforms the image
+        """
+        if image_id not in self.transformed_images.keys():
+            self.transformed_images[image_id] = self.transformImage(image)
+        return self.transformed_images[image_id]
     
     
     def __getitem__(self, index):
         """Take the index of item and returns the image, label, expert prediction and index in original dataset"""
         label = self.targets[index]
         img = self.getImage(index)
-        if self.preprocess:
-            image = img
-        else:
-            image = self.transformImage(img)
+        #if self.preprocess:
+        #    image = img
+        #else:
+        #    image = self.transformImage(img)
         #image = self.transform_test(self.images[index])
         filename = self.filenames[index]
         expert_pred = self.expert_preds[index]
         indice = self.indices[index]
         labeled = self.labeled[index]
+
+        #optimized
+        image = self.getTransformedImage(img, filename)
+        
         return torch.FloatTensor(image), label, expert_pred, indice, labeled, str(filename)
 
     def __len__(self):
@@ -364,8 +378,8 @@ def getQbQPointsDifference(expert_models, data_loader, budget, mod=None, param=N
                     assert isinstance(expert_model, nn.Module), "expert_model is not type nn.Module"
                     outputs_exp = expert_model(images)
                 elif mod == "ssl":
-                    assert isinstance(expert_model, ex.Expert), "expert is not type Expert"
-                    expert = expert_model # only for better readability
+                    assert isinstance(expert_models[expert_model], ex.Expert), "expert is not type Expert"
+                    expert = expert_models[expert_model] # only for better readability
                     features = expert.sslModel.embedded_model.get_embedding(batch=images)
                     logits, _ = expert.sslModel.linear_model(features)
                     scores = torch.softmax(logits, dim=1)
@@ -444,13 +458,20 @@ def getExpertModels(indices, experts, train_dataset, val_dataset, test_dataset, 
         dataset_val_unlabeled = NIHExpertDatasetMemory(None, val_dataset.getAllFilenames(), np.array(val_dataset.getAllTargets()), expert.predict , [1]*len(val_dataset.getAllIndices()), 
                                                        val_dataset.getAllIndices(), param=param, preload=param_al["PRELOAD"], image_container=image_container)
 
-        dataLoaderTrainLabeled = DataLoader(dataset=dataset_train_labeled, batch_size=param_al["BATCH_SIZE"], shuffle=True, num_workers=4, pin_memory=True)
-        dataLoaderValUnlabeled = DataLoader(dataset=dataset_val_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=4, pin_memory=True)
+        dataLoaderTrainLabeled = DataLoader(dataset=dataset_train_labeled, batch_size=param_al["BATCH_SIZE"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
+        dataLoaderValUnlabeled = DataLoader(dataset=dataset_val_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
 
         gc.collect()
         
         #expert_models.append(NetSimple(2, 3, 100, 100, 1000,500).to(device))
-        expert_models[labelerId] = ResnetPretrained(2, "./SSL_Working", type="50").to(device)
+        model_folder = param["Parent_PATH"]+"/SSL_Working/NIH/Embedded"
+        if param["cluster"]:
+            model_folder += f"/Seed_{seed}_Fold{fold}"
+            
+        expert_models[labelerId] = ResnetPretrained(2, model_folder, type="50").to(device)
+        if torch.cuda.device_count() > 1:
+            print("Use ", torch.cuda.device_count(), "GPUs!")
+            expert_models[labelerId] = nn.DataParallel(expert_models[labelerId])
         dataloaders = (dataLoaderTrainLabeled, dataLoaderValUnlabeled)
         train_metrics, val_metrics = run_expert(expert_models[labelerId], param_al["EPOCH_TRAIN"], dataloaders, param=param, id=expert.labelerId, seed=seed, fold=fold, 
                    n_images=param_al["INITIAL_SIZE"], mod=learning_mod, prediction_type=prediction_type)
@@ -478,7 +499,7 @@ def getExpertModels(indices, experts, train_dataset, val_dataset, test_dataset, 
 
     dataset_train_unlabeled = NIHExpertDatasetMemory(None, all_data_filenames[indices_unlabeled], all_data_y[indices_unlabeled], None , [0]*len(indices_unlabeled), 
                                                      indices_unlabeled, param=param, preload=param_al["PRELOAD"], image_container=image_container)
-    dataLoaderTrainUnlabeled = DataLoader(dataset=dataset_train_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=4, pin_memory=True)
+    dataLoaderTrainUnlabeled = DataLoader(dataset=dataset_train_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
     
     for round in range(param_al["ROUNDS"]):
 
@@ -503,8 +524,8 @@ def getExpertModels(indices, experts, train_dataset, val_dataset, test_dataset, 
                                                            [1]*len(val_dataset.getAllIndices()), val_dataset.getAllIndices(), param=param, preload=param_al["PRELOAD"], 
                                                            image_container=image_container)
 
-            dataLoaderTrainLabeled = DataLoader(dataset=dataset_train_labeled, batch_size=param_al["BATCH_SIZE"], shuffle=True, num_workers=4, pin_memory=True)
-            dataLoaderValUnlabeled = DataLoader(dataset=dataset_val_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=4, pin_memory=True)
+            dataLoaderTrainLabeled = DataLoader(dataset=dataset_train_labeled, batch_size=param_al["BATCH_SIZE"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
+            dataLoaderValUnlabeled = DataLoader(dataset=dataset_val_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
 
             dataloaders = (dataLoaderTrainLabeled, dataLoaderValUnlabeled)
             n_images = param_al["INITIAL_SIZE"] + (round+1)*param_al["LABELS_PER_ROUND"]
@@ -518,12 +539,12 @@ def getExpertModels(indices, experts, train_dataset, val_dataset, test_dataset, 
         
         dataset_train_unlabeled = NIHExpertDatasetMemory(None, all_data_filenames[indices_unlabeled], all_data_y[indices_unlabeled], None , [0]*len(indices_unlabeled), 
                                                          indices_unlabeled, param=param, preload=param_al["PRELOAD"], image_container=image_container)
-        dataLoaderTrainUnlabeled = DataLoader(dataset=dataset_train_unlabeled, batch_size=param_al["BATCH_SIZE"], shuffle=True, num_workers=4, pin_memory=True)
+        dataLoaderTrainUnlabeled = DataLoader(dataset=dataset_train_unlabeled, batch_size=param_al["BATCH_SIZE"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
 
     
     dataset_test_unlabeled = NIHExpertDatasetMemory(None, test_dataset.getAllFilenames(), np.array(test_dataset.getAllTargets()), expert.predict , [1]*len(test_dataset.getAllIndices()), 
                                                     test_dataset.getAllIndices(), param=param, preload=param_al["PRELOAD"], image_container=image_container)
-    dataLoaderVal = DataLoader(dataset=dataset_test_unlabeled, batch_size=param_al["BATCH_SIZE"], shuffle=True, num_workers=4, pin_memory=True)
+    dataLoaderVal = DataLoader(dataset=dataset_test_unlabeled, batch_size=param_al["BATCH_SIZE"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
     met_test = {}
     for labelerId, expert in experts.items():
         temp = metrics_print_expert(expert_models[labelerId], dataLoaderVal, id=expert.labelerId, seed=seed, fold=fold, 
@@ -564,13 +585,20 @@ def getExpertModel(indices, train_dataset, val_dataset, test_dataset, expert, pa
                                                    val_dataset.getAllIndices(), param=param, preload=param_al["PRELOAD"], image_container=image_container)
     
     # Lädt die Dataloaders
-    dataLoaderTrainLabeled = DataLoader(dataset=dataset_train_labeled, batch_size=param_al["BATCH_SIZE"], shuffle=True, num_workers=4, pin_memory=True)
-    dataLoaderTrainUnlabeled = DataLoader(dataset=dataset_train_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=4, pin_memory=True)    
-    dataLoaderValUnlabeled = DataLoader(dataset=dataset_val_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=4, pin_memory=True)
+    dataLoaderTrainLabeled = DataLoader(dataset=dataset_train_labeled, batch_size=param_al["BATCH_SIZE"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
+    dataLoaderTrainUnlabeled = DataLoader(dataset=dataset_train_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)    
+    dataLoaderValUnlabeled = DataLoader(dataset=dataset_val_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
     
     # train expert model on labeled data
     #model_expert = NetSimple(2, 3, 100, 100, 1000,500).to(device)
-    model_expert = ResnetPretrained(2, "./SSL_Working", type="50").to(device)
+    model_folder = param["Parent_PATH"]+"/SSL_Working/NIH/Embedded"
+    if param["cluster"]:
+        model_folder += f"/Seed_{seed}_Fold{fold}"
+        
+    model_expert = ResnetPretrained(2, model_folder, type="50").to(device)
+    if torch.cuda.device_count() > 1:
+        print("Use ", torch.cuda.device_count(), "GPUs!")
+        model_expert = nn.DataParallel(model_expert)
     # Trainier Modell um Experten vorherzusagen
 
     dataloaders = (dataLoaderTrainLabeled, dataLoaderValUnlabeled)
@@ -608,8 +636,8 @@ def getExpertModel(indices, train_dataset, val_dataset, test_dataset, expert, pa
                                                          indices_unlabeled, param=param, preload=param_al["PRELOAD"], image_container=image_container)
 
         
-        dataLoaderTrainLabeled = DataLoader(dataset=dataset_train_labeled, batch_size=param_al["BATCH_SIZE"], shuffle=True, num_workers=4, pin_memory=True)
-        dataLoaderTrainUnlabeled = DataLoader(dataset=dataset_train_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=4, pin_memory=True)
+        dataLoaderTrainLabeled = DataLoader(dataset=dataset_train_labeled, batch_size=param_al["BATCH_SIZE"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
+        dataLoaderTrainUnlabeled = DataLoader(dataset=dataset_train_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
 
         
         # train model on labeled data
@@ -626,7 +654,7 @@ def getExpertModel(indices, train_dataset, val_dataset, test_dataset, expert, pa
 
     dataset_test_unlabeled = NIHExpertDatasetMemory(None, test_dataset.getAllFilenames(), np.array(test_dataset.getAllTargets()), expert.predict , [1]*len(test_dataset.getAllIndices()), 
                                                     test_dataset.getAllIndices(), param=param, preload=param_al["PRELOAD"], image_container=image_container)
-    dataLoaderVal = DataLoader(dataset=dataset_test_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=4, pin_memory=True)
+    dataLoaderVal = DataLoader(dataset=dataset_test_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
     met_test = metrics_print_expert(model_expert, dataLoaderVal, id=expert.labelerId, seed=seed, fold=fold, 
                                n_images=param_al["INITIAL_SIZE"] + param_al["ROUNDS"]*param_al["LABELS_PER_ROUND"], step="Test", mod=learning_mod, prediction_type=prediction_type, param=param)
 
@@ -662,12 +690,19 @@ def getExpertModelNormal(indices, train_dataset, val_dataset, test_dataset, expe
                                                    val_dataset.getAllIndices(), param=param, preload=param_al["PRELOAD"], image_container=image_container)
     
     # Lädt die Dataloaders
-    dataLoaderTrainLabeled = DataLoader(dataset=dataset_train_labeled, batch_size=param_al["BATCH_SIZE"], shuffle=True, num_workers=4, pin_memory=True)    
-    dataLoaderValUnlabeled = DataLoader(dataset=dataset_val_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=4, pin_memory=True)
+    dataLoaderTrainLabeled = DataLoader(dataset=dataset_train_labeled, batch_size=param_al["BATCH_SIZE"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)    
+    dataLoaderValUnlabeled = DataLoader(dataset=dataset_val_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
     
     # train expert model on labeled data
     #model_expert = NetSimple(2, 3, 100, 100, 1000,500).to(device)
-    model_expert = ResnetPretrained(2, "./SSL_Working", type="50").to(device)
+    model_folder = param["Parent_PATH"]+"/SSL_Working/NIH/Embedded"
+    if param["cluster"]:
+        model_folder += f"/Seed_{seed}_Fold{fold}"
+    
+    model_expert = ResnetPretrained(2, model_folder, type="50").to(device)
+    if torch.cuda.device_count() > 1:
+        print("Use ", torch.cuda.device_count(), "GPUs!")
+        model_expert = nn.DataParallel(model_expert)
     # Trainier Modell um Experten vorherzusagen
 
     dataloaders = (dataLoaderTrainLabeled, dataLoaderValUnlabeled)
@@ -683,7 +718,7 @@ def getExpertModelNormal(indices, train_dataset, val_dataset, test_dataset, expe
 
     dataset_test_unlabeled = NIHExpertDatasetMemory(None, test_dataset.getAllFilenames(), np.array(test_dataset.getAllTargets()), expert.predict , [1]*len(test_dataset.getAllIndices()), 
                                                     test_dataset.getAllIndices(), param=param, preload=param_al["PRELOAD"], image_container=image_container)
-    dataLoaderVal = DataLoader(dataset=dataset_test_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=4, pin_memory=True)
+    dataLoaderVal = DataLoader(dataset=dataset_test_unlabeled, batch_size=param_al["BATCH_SIZE_VAL"], shuffle=True, num_workers=param["num_worker"], pin_memory=True)
     met_test = metrics_print_expert(model_expert, dataLoaderVal, id=expert.labelerId, seed=seed, fold=fold, 
                                n_images=param["LABELED"], step="Test", mod=learning_mod, prediction_type=prediction_type, param=param)
 
@@ -825,7 +860,7 @@ def metrics_print_expert(model, data_loader, expert=None, defer_net = False, id=
     data_loader: data loader
     '''
 
-    assert (mod is not None) and (mod == "al" or mod == "ssl"), "You have to pass a mod (al or ssl)"
+    assert (mod is not None) and (mod == "al" or mod == "ssl" or mod == "perfect"), "You have to pass a mod (al or ssl)"
     assert (prediction_type == "target" or prediction_type == "right"), "You have to pass a prediction_type (target or right)"
     if param["NEPTUNE"]["NEPTUNE"]:
         assert step != "", "Need step"
@@ -855,6 +890,8 @@ def metrics_print_expert(model, data_loader, expert=None, defer_net = False, id=
                 predictions = torch.argmax(scores, dim=1)#.cpu()#.tolist()
                 #preds, preds2 = torch.max(scores, 1)
                 #output = scores
+            elif mod == "perfect":
+                predictions = expert_pred.to(device)
 
             if cou == 1:
                 print("###########")
@@ -939,7 +976,7 @@ def testExpert(expert, dataset, image_container, param, mod, prediction_type, se
     final_dataset = NIHExpertDatasetMemory(None, dataset.getAllFilenames(), np.array(dataset.getAllTargets()), expert.predict , [1]*len(dataset.getAllIndices()), 
                                                        dataset.getAllIndices(), param=param, preload=True, image_container=image_container)
 
-    data_loader = DataLoader(dataset=final_dataset, batch_size=128, shuffle=True, num_workers=4, pin_memory=True)
+    data_loader = DataLoader(dataset=final_dataset, batch_size=128, shuffle=True, num_workers=param["num_worker"], pin_memory=True)
 
     if param["NEPTUNE"]["NEPTUNE"]:
         run = param["NEPTUNE"]["RUN"]
@@ -950,9 +987,14 @@ def testExpert(expert, dataset, image_container, param, mod, prediction_type, se
     else:
         param_neptune_off = copy.deepcopy(param)
     if mod == "al":
-        metrics = metrics_print_expert(model=model, data_loader=data_loader, expert=None, id=expert.labelerId, mod=mod, prediction_type=prediction_type, param=param_neptune_off, print_result=False)
+        metrics = metrics_print_expert(model=model, data_loader=data_loader, expert=None, id=expert.labelerId, mod=mod, prediction_type=prediction_type, param=param_neptune_off, 
+                                       print_result=False)
     elif mod == "ssl":
-        metrics = metrics_print_expert(model=None, data_loader=data_loader, expert=expert, id=expert.labelerId, mod=mod, prediction_type=prediction_type, param=param_neptune_off, print_result=False)
+        metrics = metrics_print_expert(model=None, data_loader=data_loader, expert=expert, id=expert.labelerId, mod=mod, prediction_type=prediction_type, param=param_neptune_off, 
+                                       print_result=False)
+    elif mod == "perfect":
+        metrics = metrics_print_expert(model=None, data_loader=data_loader, expert=expert, id=expert.labelerId, mod=mod, prediction_type=prediction_type, param=param_neptune_off, 
+                                       print_result=False)
 
     if param["NEPTUNE"]["NEPTUNE"]:
         output = data_name + "_Start_End"

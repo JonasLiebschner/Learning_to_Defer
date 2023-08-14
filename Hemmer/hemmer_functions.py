@@ -26,7 +26,7 @@ def joint_sparse_framework_loss(epoch, classifier_output, allocation_system_outp
 
     # loss for allocation system 
     
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # set up zero-initialized tensor to store weighted team predictions
     batch_size = len(targets)
@@ -72,7 +72,7 @@ def our_loss(epoch, classifier_output, allocation_system_output, expert_preds, t
     #   expert_preds: nxm matrix with expert predictions with n=number of experts, m=number of classes
     #   targets: targets as 1-dim vector with n length with n=batch_size
     
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     batch_size = len(targets)
     team_probs = torch.zeros((batch_size, param["NUM_CLASSES"])).to(classifier_output.device) # set up zero-initialized tensor to store team predictions
@@ -214,7 +214,7 @@ def train_one_epoch(epoch, feature_extractor, classifier, allocation_system, tra
     classifier.train()
     allocation_system.train()
     
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     for i, (batch_input, batch_targets, batch_filenames) in enumerate(train_loader):
         batch_targets = batch_targets.to(device)
@@ -241,7 +241,7 @@ def evaluate_one_epoch(epoch, feature_extractor, classifier, allocation_system, 
     classifier.eval()
     allocation_system.eval()
     
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     classifier_outputs = torch.tensor([]).to(device)
     allocation_system_outputs = torch.tensor([]).to(device)
@@ -290,7 +290,7 @@ def evaluate_one_epoch(epoch, feature_extractor, classifier, allocation_system, 
 def run_team_performance_optimization(method, seed, nih_dataloader, expert_fns, param=None):
     print(f'Team Performance Optimization with {method}')
     
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if method == "Joint Sparse Framework":
         loss_fn = joint_sparse_framework_loss
@@ -302,6 +302,9 @@ def run_team_performance_optimization(method, seed, nih_dataloader, expert_fns, 
         allocation_system_activation_function = "softmax"
 
     feature_extractor = Resnet().to(device)
+    if torch.cuda.device_count() > 1:
+        print("Use ", torch.cuda.device_count(), "GPUs!")
+        feature_extractor = nn.DataParallel(feature_extractor)
 
     overall_allocation_system_decisions = []
     overall_system_preds = []
@@ -315,6 +318,11 @@ def run_team_performance_optimization(method, seed, nih_dataloader, expert_fns, 
 
         allocation_system = Network(output_size=param["NUM_EXPERTS"] + 1,
                                  softmax_sigmoid=allocation_system_activation_function, param=param).to(device)
+
+        if torch.cuda.device_count() > 1:
+            print("Use ", torch.cuda.device_count(), "GPUs!")
+            classifier = nn.DataParallel(classifier)
+            allocation_system = nn.DataParallel(allocation_system)
 
         train_loader, val_loader, test_loader = nih_dataloader.get_data_loader_for_fold(fold_idx)
 
@@ -414,7 +422,7 @@ def train_full_automation_one_epoch(epoch, feature_extractor, classifier, train_
     feature_extractor.eval()
     classifier.train()
     
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     for i, (batch_input, batch_targets, _) in enumerate(train_loader):
         batch_targets = batch_targets.to(device)
@@ -436,7 +444,7 @@ def evaluate_full_automation_one_epoch(epoch, feature_extractor, classifier, dat
     feature_extractor.eval()
     classifier.eval()
     
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     classifier_outputs = torch.tensor([]).to(device)
     targets = torch.tensor([]).to(device)
@@ -464,7 +472,7 @@ def evaluate_full_automation_one_epoch(epoch, feature_extractor, classifier, dat
 def run_full_automation(seed, nih_dataloader, PATH, maxLabels=800, param=None):
     print(f'Training full automation baseline')
     
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     feature_extractor = Resnet().to(device)
 
@@ -511,7 +519,7 @@ def train_moae_one_epoch(feature_extractor, classifiers, allocation_system, trai
     for classifier in classifiers:
         classifier.train()
         
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     for i, (batch_input, batch_targets, batch_filenames) in enumerate(train_loader):
         batch_input = batch_input.to(device)
@@ -540,7 +548,7 @@ def evaluate_moae_one_epoch(feature_extractor, classifiers, allocation_system, d
     for classifier in classifiers:
         classifier.eval()
         
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     classifiers_outputs = torch.tensor([]).to(device)
     allocation_system_outputs = torch.tensor([]).to(device)
@@ -579,7 +587,7 @@ def evaluate_moae_one_epoch(feature_extractor, classifiers, allocation_system, d
 def run_moae(seed, nih_dataloader, PATH, maxLabels=800, param=None):
     print(f'Training Mixture of artificial experts baseline')
     
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     feature_extractor = Resnet().to(device)
 
@@ -633,7 +641,7 @@ def train_mohe_one_epoch(feature_extractor, allocation_system, train_loader, opt
     feature_extractor.eval()
     allocation_system.train()
     
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     for i, (batch_input, batch_targets, batch_filenames) in enumerate(train_loader):
         batch_input = batch_input.to(device)
@@ -661,7 +669,7 @@ def evaluate_mohe_one_epoch(feature_extractor, allocation_system, data_loader, e
     feature_extractor.eval()
     allocation_system.eval()
     
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     allocation_system_outputs = torch.tensor([]).to(device)
     targets = torch.tensor([]).long().to(device)
@@ -707,7 +715,7 @@ def evaluate_mohe_one_epoch(feature_extractor, allocation_system, data_loader, e
 def run_mohe(seed, nih_dataloader, expert_fns, PATH, maxLabels=800, param=None):
     print(f'Training Mixture of human experts baseline')
     
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     feature_extractor = Resnet().to(device)
 

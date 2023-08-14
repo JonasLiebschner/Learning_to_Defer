@@ -1,6 +1,5 @@
 import sys, os
 
-from torch.utils.tensorboard import SummaryWriter
 from absl import flags
 from absl import app
 
@@ -10,7 +9,6 @@ from SSL.feature_extractor.emb_model_lib import EmbeddingModel
 import Dataset.Dataset as ds
 import torch
 
-#from __future__ import print_function
 import random
 
 import time
@@ -25,7 +23,7 @@ from SSL.LinearModel import LinearNN
 import SSL.datasets.nih as nih
 from SSL.utils import accuracy, setup_default_logging, AverageMeter, WarmupCosineLrScheduler
 from SSL.utils import load_from_checkpoint
-from SSL.Expert import CIFAR100Expert, NIHExpert
+#from SSL.Expert import CIFAR100Expert, NIHExpert
 from SSL.feature_extractor.embedding_model import EmbeddingModel as EmbeddingModelL
 
 def set_seed(seed):
@@ -42,13 +40,15 @@ def create_embedded_model(dataloaders, param, neptune_param, fold, seed):
     path = param["PATH"]
     neptune_param = neptune_param
 
-    wkdir = os.getcwd() + "/SSL_Working"
+    #wkdir = os.getcwd() + "/SSL_Working"
+    wkdir = param["Parent_PATH"] + "/SSL_Working"
+    
     sys.path.append(wkdir)
 
     SAVE = True
 
     # get training directory
-    train_dir = get_train_dir(wkdir, args, 'emb_net')
+    train_dir = get_train_dir(wkdir, args, 'emb_net', param, seed, fold)
 
     print("Train dir: " + train_dir)
 
@@ -61,7 +61,7 @@ def create_embedded_model(dataloaders, param, neptune_param, fold, seed):
         writer = SummaryWriter(train_dir + 'logs/')
 
     # initialize base model
-    emb_model = EmbeddingModel(args, wkdir, writer, dataloaders, param, neptune_param)
+    emb_model = EmbeddingModel(args, wkdir, writer, dataloaders, param, neptune_param, seed, fold)
     # try to load previous training runs
     start_epoch = emb_model.load_from_checkpoint(mode='latest')
 
@@ -118,7 +118,11 @@ def set_model(args):
     model = LinearNN(num_classes=args["n_classes"], feature_dim=feature_dim, proj=True)
 
     model.train()
-    model.cuda()  
+    model.cuda() 
+
+    if torch.cuda.device_count() > 1:
+        print("Use ", torch.cuda.device_count(), "GPUs!")
+        model = nn.DataParallel(model)
     
     if args["eval_ema"]:
         ema_model = LinearNN(num_classes=args["n_classes"], feature_dim=feature_dim, proj=True)
@@ -127,6 +131,10 @@ def set_model(args):
             param_k.requires_grad = False  # not update by gradient for eval_net
         ema_model.cuda()  
         ema_model.eval()
+
+        if torch.cuda.device_count() > 1:
+            print("Use ", torch.cuda.device_count(), "GPUs!")
+            ema_model = nn.DataParallel(ema_model)
     else:
         ema_model = None
         
@@ -201,8 +209,7 @@ def train_one_epoch(epoch,
         ims_x_weak, lbs_x, im_id = next(dl_x)
         (ims_u_weak, ims_u_strong0, ims_u_strong1), lbs_u_real, im_id = next(dl_u)
 
-        lbs_x = lbs_x.type(torch.LongTensor) 
-        lbs_x = lbs_x.cuda()
+        lbs_x = lbs_x.type(torch.LongTensor).cuda()
         lbs_u_real = lbs_u_real.cuda()
 
         # --------------------------------------
@@ -211,13 +218,17 @@ def train_one_epoch(epoch,
 
         imgs = torch.cat([ims_x_weak, ims_u_weak, ims_u_strong0, ims_u_strong1], dim=0).cuda()
         embedding = emb_model.get_embedding(batch=imgs)
+
         logits, features = model(embedding)
 
-        logits_x = logits[:bt]
+        """logits_x = logits[:bt]
         logits_u_w, logits_u_s0, logits_u_s1 = torch.split(logits[bt:], btu)
         
         feats_x = features[:bt]
-        feats_u_w, feats_u_s0, feats_u_s1 = torch.split(features[bt:], btu)
+        feats_u_w, feats_u_s0, feats_u_s1 = torch.split(features[bt:], btu)"""
+
+        logits_x, logits_u_w, logits_u_s0, logits_u_s1 = torch.split(logits, [bt, btu, btu, btu])
+        feats_x, feats_u_w, feats_u_s0, feats_u_s1 = torch.split(features, [bt, btu, btu, btu])
 
         
         loss_x = criteria_x(logits_x, lbs_x)
@@ -227,7 +238,8 @@ def train_one_epoch(epoch,
             feats_x = feats_x.detach()
             feats_u_w = feats_u_w.detach()
             
-            probs = torch.softmax(logits_u_w, dim=1)            
+            #probs = torch.softmax(logits_u_w, dim=1)  
+            probs = F.softmax(logits_u_w, dim=1) 
             # DA
             prob_list.append(probs.mean(0))
             if len(prob_list)>32:
@@ -337,7 +349,7 @@ def evaluate(model, ema_model, emb_model, dataloader):
 
             embedding = emb_model.get_embedding(batch=ims)
             logits, _ = model(embedding)
-            scores = torch.softmax(logits, dim=1)
+            scores = F.softmax(logits, dim=1)
             preds += torch.argmax(scores, dim=1).detach().cpu().tolist()
             targets += lbs.detach().cpu().tolist()
             top1 = accuracy(scores, lbs, (1, ))
@@ -346,7 +358,7 @@ def evaluate(model, ema_model, emb_model, dataloader):
             if ema_model is not None:
                 embedding = emb_model.get_embedding(batch=ims)
                 logits, _ = ema_model(embedding)
-                scores = torch.softmax(logits, dim=1)
+                scores = F.softmax(logits, dim=1)
                 top1 = accuracy(scores, lbs, (1, ))
                 ema_top1_meter.update(top1.item())
     return top1_meter.avg, ema_top1_meter.avg
@@ -372,7 +384,7 @@ class exper:
         self.labeler_id = id
 
 
-def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded_model=None, param=None, neptune_param=None):
+def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded_model=None, param=None, neptune_param=None, added_epochs=0):
     args = {
         "dataset": "NIH", #
         "wresnet_k": 2, #width factor of wide resnet
@@ -404,6 +416,10 @@ def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded
     args["n_labeled"] = n_labeled
     args["seed"] = seed
     args["n_epoches"] = param["SSL"]["N_EPOCHS"]
+    if added_epochs != 0: #Maybe start "new" when ssl for active learning beacuse additional training doesn't work (nan values)
+        args["n_epoches"] = added_epochs
+        print(f"Epochs added: {added_epochs}")
+        
     args["batchsize"] = param["SSL"]["BATCHSIZE"]
     args["n_imgs_per_epoch"] = param["SSL"]["N_IMGS_PER_EPOCH"]
     if param["EMBEDDED"]["ARGS"]["model"] == "resnet18":
@@ -413,7 +429,9 @@ def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded
     path = param["PATH"]
 
     #Setzt Logger fest
-    logger, output_dir = setup_default_logging("SSL_Working/", args)
+    out_path = f"{param['Parent_PATH']}/SSL_Working/SSL/"
+        
+    logger, output_dir = setup_default_logging(out_path, args)
     logger.info(dict(args))
     
     tb_logger = SummaryWriter(output_dir)
@@ -427,7 +445,9 @@ def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded
     #Erstellt das Modell
     model, criteria_x, ema_model = set_model(args)
     #Lädt das trainierte eingebettete Modell
-    emb_model = EmbeddingModelL(os.getcwd() + "/SSL_Working", args["dataset"], type=args["type"])
+    #emb_model = EmbeddingModelL(os.getcwd() + "/SSL_Working", args["dataset"], type=args["type"])
+
+    emb_model = EmbeddingModelL(out_path[:-5], args["dataset"], type=args["type"], param=param, seed=seed, fold=fold_idx)
     logger.info("Total params: {:.2f}M".format(
         sum(p.numel() for p in model.parameters()) / 1e6))
 
@@ -437,8 +457,8 @@ def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded
         
         dltrain_x, dltrain_u = sslDataset.get_train_loader_interface( 
             exp, args["batchsize"], args["mu"], n_iters_per_epoch, L=args["n_labeled"], method='comatch')
-        dlval = sslDataset.get_val_loader_interface(exp, batch_size=64, num_workers=4, fold_idx=fold_idx)
-        dlval = sslDataset.get_test_loader_interface(exp, batch_size=64, num_workers=4, fold_idx=fold_idx)
+        dlval = sslDataset.get_val_loader_interface(exp, batch_size=64, num_workers=param["num_worker"], fold_idx=fold_idx)
+        dlval = sslDataset.get_test_loader_interface(exp, batch_size=64, num_workers=param["num_worker"], fold_idx=fold_idx)
 
     wd_params, non_wd_params = [], []
     for name, params in model.named_parameters():
@@ -455,6 +475,14 @@ def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded
     
     model, ema_model, optim, lr_schdlr, start_epoch, metrics, prob_list, queue = \
         load_from_checkpoint(output_dir, model, ema_model, optim, lr_schdlr)
+
+    if added_epochs > 0: #Reset for added epochs
+        optim = torch.optim.SGD(param_list, lr=args["lr"], weight_decay=args["weight_decay"],
+                            momentum=args["momentum"], nesterov=True)
+
+        lr_schdlr = WarmupCosineLrScheduler(optim, n_iters_all, warmup_iter=0)
+
+        queue = None
 
     # memory bank
     args["queue_size"] = args["queue_batch"]*(args["mu"]+1)*args["batchsize"]
@@ -489,6 +517,10 @@ def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded
         best_acc = metrics['best_acc']
         best_epoch = metrics['best_epoch']
     logger.info('-----------start training--------------')
+
+    if added_epochs > 0:
+        start_epoch = 0
+    
     for epoch in range(start_epoch, args["n_epoches"]):
         
         loss_x, loss_u, loss_c, mask_mean, num_pos, guess_label_acc, queue_feats, queue_probs, queue_ptr, prob_list = \
