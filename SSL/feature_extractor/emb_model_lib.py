@@ -41,12 +41,12 @@ class EmbeddingModel:
     :ivar test_loader: Test dataloader
     :ivar val_loader: Validation dataloader
     """
-    def __init__(self, args, wkdir, writer, dataloaders, param, neptune_param=None):
+    def __init__(self, args, wkdir, writer, dataloaders, param, neptune_param=None, seed=None, fold=None):
         self.global_step = 0
         self.args = args
         self.writer = writer
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.train_dir = get_train_dir(wkdir, args, 'emb_net')
+        self.train_dir = get_train_dir(wkdir, args, 'emb_net', param, seed, fold)
         self.model = self.get_model()
         if torch.cuda.device_count() > 1:
             print("Use ", torch.cuda.device_count(), "GPUs!")
@@ -119,7 +119,7 @@ class EmbeddingModel:
                              prefix='Train Epoch ' + str(epoch + 1) + ':',
                              suffix='Complete', length=40)
             if self.writer is not None:
-                self.writer.add_scalar('Loss/total', loss, self.global_step)
+                #self.writer.add_scalar('Loss/total', loss, self.global_step)
                 self.writer.add_scalar('LR/lr', self.optimizer.param_groups[0]["lr"], self.global_step)
         print("ii " + str(ii))
         return loss
@@ -158,8 +158,8 @@ class EmbeddingModel:
                 print('Val-Accuracy:', acc)
             else:
                 print('Epoch:', epoch + 1, '- Val-Accuracy:', acc)
-        if self.writer is not None:
-            self.writer.add_scalar('Acc/valid', acc, self.global_step)
+        #if self.writer is not None:
+        #    self.writer.add_scalar('Acc/valid', acc, self.global_step)
         if return_acc: return acc
 
     
@@ -229,7 +229,7 @@ class EmbeddingModel:
             self.model.load_state_dict(checkpoint['model_state_dict'])
             self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             self.global_step = checkpoint['global_step']
-            epoch = checkpoint['epoch']
+            epoch = checkpoint['epoch'] + 1
             print('Found latest checkpoint at', cp_dir)
             print('Continuing in epoch', epoch + 1)
         except:

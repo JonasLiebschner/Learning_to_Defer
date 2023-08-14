@@ -21,7 +21,7 @@ class EmbeddingModel:
     :ivar device: Device
     :ivar emb_model: Embedding model
     """
-    def __init__(self, train_dir, dataset, embedded_model=None, type="18"):
+    def __init__(self, train_dir, dataset, embedded_model=None, type="18", param=None, seed=None, fold=None):
         self.train_dir = train_dir
         self.dataset = dataset.lower()
         if self.dataset == 'cifar100':
@@ -33,12 +33,12 @@ class EmbeddingModel:
             sys.exit()
         self.type = type
         self.device = get_device()
-        self.emb_model = self.get_emb_model(os.getcwd())
+        self.emb_model = self.get_emb_model(os.getcwd(), param, seed, fold)
         if torch.cuda.device_count() > 1:
             print("Use ", torch.cuda.device_count(), "GPUs!")
             self.emb_model = nn.DataParallel(self.emb_model)
 
-    def get_emb_model(self, wkdir):
+    def get_emb_model(self, wkdir, param, seed, fold):
         """Initialize base model
 
         :param wkdir:
@@ -50,7 +50,7 @@ class EmbeddingModel:
             model = self.load_emb_net_from_checkpoint(model, wkdir)
             model = torch.nn.Sequential(*list(model.children())[:-1])
         elif self.dataset == 'nih':
-            model = Resnet(self.args['num_classes'], self.train_dir, type=self.type)
+            model = Resnet(self.args['num_classes'], self.train_dir, type=self.type, param=param, seed=seed, fold=fold)
         print('Loaded Model', self.args['fe_model'])
         model = to_device(model, self.device)
         #opt_mod = torch.compile(model)
@@ -161,7 +161,7 @@ def get_train_dir(wkdir, args, mode):
 
 
 class Resnet(torch.nn.Module):
-    def __init__(self, num_classes, train_dir, type="18"):
+    def __init__(self, num_classes, train_dir, type="18", param=None, seed=None, fold=None):
         super().__init__()
         self.num_classes = num_classes
         if type == "18":
@@ -172,9 +172,12 @@ class Resnet(torch.nn.Module):
 
         try:
             print('load Resnet-' + type + ' checkpoint')
+            if param["cluster"]:
+                path = train_dir + f"/NIH/Embedded/Seed_{seed}_Fold_{fold}/emb_net@dataset-nih-model-resnet" + type + "-num_classes-2/checkpoints/checkpoint.best"
+            else:
+                path = train_dir + "/NIH/emb_net@dataset-nih-model-resnet" + type + "-num_classes-2/checkpoints/checkpoint.best"
             print(self.load_my_state_dict(
-                torch.load(
-                    train_dir + "/NIH/emb_net@dataset-nih-model-resnet" + type + "-num_classes-2/checkpoints/checkpoint.best"),
+                torch.load(path),
                 strict=False))
         except KeyError:
             print('load Resnet-' + type + ' pretrained on ImageNet')

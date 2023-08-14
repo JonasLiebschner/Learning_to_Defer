@@ -291,7 +291,7 @@ class ResnetPretrained(torch.nn.Module):
             print('load Resnet-' + type + ' checkpoint for expert')
             print(self.load_my_state_dict(
                 torch.load(
-                    train_dir + "/NIH/emb_net@dataset-nih-model-resnet" + type + "-num_classes-2/checkpoints/checkpoint.best"),
+                    train_dir + "/emb_net@dataset-nih-model-resnet" + type + "-num_classes-2/checkpoints/checkpoint.best"),
                 strict=False))
         except KeyError:
             print('load Resnet-' + type + ' pretrained on ImageNet')

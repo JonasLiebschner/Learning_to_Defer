@@ -59,14 +59,17 @@ def save_to_logs(train_dir, acc, loss):
         json.dump(log, f)
 
 
-def get_train_dir(wkdir, args, mode):
+def get_train_dir(wkdir, args, mode, param, seed, fold):
     """Get or create training directory
 
     :param wkdir: Working directory
     :param mode: Mode
     :param args: Args
     """
-    path = f'{wkdir}/{args["dataset"].upper()}/{concat_args(args, mode)}/'
+    if param["cluster"]:
+        path = f'{wkdir}/{args["dataset"].upper()}/Embedded/Seed_{seed}_Fold_{fold}/{concat_args(args, mode)}/'
+    else:
+        path = f'{wkdir}/{args["dataset"].upper()}/Embedded/{concat_args(args, mode)}/'
     try:
         os.mkdir(path)
     except:
