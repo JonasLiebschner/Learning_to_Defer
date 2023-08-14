@@ -638,11 +638,16 @@ def one_run(dataManager, run_param):
         verma_metrics[seed] = {}
         hemmer_metrics[seed] = {}
 
-        for fold_idx in range(run_param["K"]):
-        #for fold_idx in range(2):
+        #for fold_idx in range(run_param["K"]):
+        for fold_idx in range(2):
 
-            if os.path.isdir(f'{run_param["Parent_PATH"]}/SSL_Working'):
-                cleanTrainDir(f'{run_param["Parent_PATH"]}/SSL_Working')
+            
+            if run_param["cluster"]: #Keep the embedded model in cluster training
+                if os.path.isdir(f'{run_param["Parent_PATH"]}/SSL_Working/SSL'):
+                    cleanTrainDir(f'{run_param["Parent_PATH"]}/SSL_Working/SSL')
+            else: #delete everything if space is limited
+                if os.path.isdir(f'{run_param["Parent_PATH"]}/SSL_Working'):
+                    cleanTrainDir(f'{run_param["Parent_PATH"]}/SSL_Working')
 
             if seed != "":
                 set_seed(seed, fold_idx, text="")
@@ -650,8 +655,8 @@ def one_run(dataManager, run_param):
             print("/n")
             print(f"Seed: {seed} - Fold: {fold_idx} \n")
 
-            if os.path.isdir(f'{run_param["Parent_PATH"]}/SSL_Working/NIH/EmbeddingCM_bin'):
-                cleanTrainDir(f'{run_param["Parent_PATH"]}SSL_Working/NIH/EmbeddingCM_bin')
+            #if os.path.isdir(f'{run_param["Parent_PATH"]}/SSL_Working/NIH/EmbeddingCM_bin'):
+            #    cleanTrainDir(f'{run_param["Parent_PATH"]}SSL_Working/NIH/EmbeddingCM_bin')
 
             neptune = {
                 "SEED": seed,
@@ -868,6 +873,7 @@ def run_experiment(param):
                                                     run["metrics"] = metrics_save
 
                                                     run.stop()
+                                                return
 
     return expert_metrics_all
 
@@ -911,14 +917,16 @@ def main(args):
         "TARGET": "Airspace_Opacity",
         "LABELER_IDS": [[4323195249, 4295232296]],
         "K": 10, #Number of folds
-        "SEEDS": [1, 2, 3, 4, 42], #Seeds for the experiments
+        #"SEEDS": [1, 2, 3, 4, 42], #Seeds for the experiments
+        "SEEDS": [42], #Seeds for the experiments
         "GT": True, # Determines if the classifier gets all data with GT Label or only the labeld data
         "MOD": ["confidence", "disagreement", "disagreement_diff", "ssl", "normal"], #Determines the experiment modus
 
         "OVERLAP": [0, 100],
         "SAMPLE_EQUAL": [False, True],
 
-        "SETTING": ["AL", "SSL", "SSL_AL", "NORMAL", "SSL_AL_SSL"],
+        #"SETTING": ["AL", "SSL", "SSL_AL", "NORMAL", "SSL_AL_SSL"],
+        "SETTING": ["SSL_AL"],
 
         "NUM_EXPERTS": 2,
         "NUM_CLASSES": 2,
@@ -998,7 +1006,10 @@ def main(args):
         "loss_type": "ova",
         "ckp_dir": f"{path}/Models", #directory name to save the checkpoints
         "experiment_name": "multiple_experts", #specify the experiment name. Checkpoints will be saved with this name
+
+        #Params for cluster training
         "num_worker": num_worker,
+        "cluster": True
     }
 
     expert_metrics_all = run_experiment(param)

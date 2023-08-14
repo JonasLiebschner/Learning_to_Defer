@@ -102,6 +102,8 @@ class NIHExpertDatasetMemory():
             self.indices = indices
         else:
             self.indices = np.array(list(range(len(self.targets))))
+
+        self.transformed_images = {}
             
     def loadImage(self, idx):
         """
@@ -139,21 +141,33 @@ class NIHExpertDatasetMemory():
 
     def transformImage(self, img):
         return self.transform_test(img)
+
+    def getTransformedImage(self, image, image_id):
+        """
+        Transforms the image
+        """
+        if image_id not in self.transformed_images.keys():
+            self.transformed_images[image_id] = self.transformImage(image)
+        return self.transformed_images[image_id]
     
     
     def __getitem__(self, index):
         """Take the index of item and returns the image, label, expert prediction and index in original dataset"""
         label = self.targets[index]
         img = self.getImage(index)
-        if self.preprocess:
-            image = img
-        else:
-            image = self.transformImage(img)
+        #if self.preprocess:
+        #    image = img
+        #else:
+        #    image = self.transformImage(img)
         #image = self.transform_test(self.images[index])
         filename = self.filenames[index]
         expert_pred = self.expert_preds[index]
         indice = self.indices[index]
         labeled = self.labeled[index]
+
+        #optimized
+        image = self.getTransformedImage(img, filename)
+        
         return torch.FloatTensor(image), label, expert_pred, indice, labeled, str(filename)
 
     def __len__(self):
@@ -450,7 +464,11 @@ def getExpertModels(indices, experts, train_dataset, val_dataset, test_dataset, 
         gc.collect()
         
         #expert_models.append(NetSimple(2, 3, 100, 100, 1000,500).to(device))
-        expert_models[labelerId] = ResnetPretrained(2, param["Parent_PATH"]+"/SSL_Working", type="50").to(device)
+        model_folder = param["Parent_PATH"]+"/SSL_Working/NIH/Embedded"
+        if param["cluster"]:
+            model_folder += f"/Seed_{seed}_Fold{fold}"
+            
+        expert_models[labelerId] = ResnetPretrained(2, model_folder, type="50").to(device)
         if torch.cuda.device_count() > 1:
             print("Use ", torch.cuda.device_count(), "GPUs!")
             expert_models[labelerId] = nn.DataParallel(expert_models[labelerId])
@@ -573,7 +591,11 @@ def getExpertModel(indices, train_dataset, val_dataset, test_dataset, expert, pa
     
     # train expert model on labeled data
     #model_expert = NetSimple(2, 3, 100, 100, 1000,500).to(device)
-    model_expert = ResnetPretrained(2, param["Parent_PATH"]+"/SSL_Working", type="50").to(device)
+    model_folder = param["Parent_PATH"]+"/SSL_Working/NIH/Embedded"
+    if param["cluster"]:
+        model_folder += f"/Seed_{seed}_Fold{fold}"
+        
+    model_expert = ResnetPretrained(2, model_folder, type="50").to(device)
     if torch.cuda.device_count() > 1:
         print("Use ", torch.cuda.device_count(), "GPUs!")
         model_expert = nn.DataParallel(model_expert)
@@ -673,7 +695,11 @@ def getExpertModelNormal(indices, train_dataset, val_dataset, test_dataset, expe
     
     # train expert model on labeled data
     #model_expert = NetSimple(2, 3, 100, 100, 1000,500).to(device)
-    model_expert = ResnetPretrained(2, param["Parent_PATH"]+"/SSL_Working", type="50").to(device)
+    model_folder = param["Parent_PATH"]+"/SSL_Working/NIH/Embedded"
+    if param["cluster"]:
+        model_folder += f"/Seed_{seed}_Fold{fold}"
+    
+    model_expert = ResnetPretrained(2, model_folder, type="50").to(device)
     if torch.cuda.device_count() > 1:
         print("Use ", torch.cuda.device_count(), "GPUs!")
         model_expert = nn.DataParallel(model_expert)

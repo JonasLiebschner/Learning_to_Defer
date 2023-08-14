@@ -42,12 +42,13 @@ def create_embedded_model(dataloaders, param, neptune_param, fold, seed):
 
     #wkdir = os.getcwd() + "/SSL_Working"
     wkdir = param["Parent_PATH"] + "/SSL_Working"
+    
     sys.path.append(wkdir)
 
     SAVE = True
 
     # get training directory
-    train_dir = get_train_dir(wkdir, args, 'emb_net')
+    train_dir = get_train_dir(wkdir, args, 'emb_net', param, seed, fold)
 
     print("Train dir: " + train_dir)
 
@@ -60,7 +61,7 @@ def create_embedded_model(dataloaders, param, neptune_param, fold, seed):
         writer = SummaryWriter(train_dir + 'logs/')
 
     # initialize base model
-    emb_model = EmbeddingModel(args, wkdir, writer, dataloaders, param, neptune_param)
+    emb_model = EmbeddingModel(args, wkdir, writer, dataloaders, param, neptune_param, seed, fold)
     # try to load previous training runs
     start_epoch = emb_model.load_from_checkpoint(mode='latest')
 
@@ -428,7 +429,9 @@ def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded
     path = param["PATH"]
 
     #Setzt Logger fest
-    logger, output_dir = setup_default_logging(f"{param['Parent_PATH']}/SSL_Working/", args)
+    out_path = f"{param['Parent_PATH']}/SSL_Working/SSL/"
+        
+    logger, output_dir = setup_default_logging(out_path, args)
     logger.info(dict(args))
     
     tb_logger = SummaryWriter(output_dir)
@@ -443,7 +446,8 @@ def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded
     model, criteria_x, ema_model = set_model(args)
     #Lädt das trainierte eingebettete Modell
     #emb_model = EmbeddingModelL(os.getcwd() + "/SSL_Working", args["dataset"], type=args["type"])
-    emb_model = EmbeddingModelL(param["Parent_PATH"] + "/SSL_Working", args["dataset"], type=args["type"])
+
+    emb_model = EmbeddingModelL(out_path[:-5], args["dataset"], type=args["type"], param=param, seed=seed, fold=fold_idx)
     logger.info("Total params: {:.2f}M".format(
         sum(p.numel() for p in model.parameters()) / 1e6))
 

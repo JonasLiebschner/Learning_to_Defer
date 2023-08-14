@@ -33,6 +33,8 @@ class Expert:
 
         self.predictions = self.data
         self.predictions["Image ID"] = self.predictions["Image ID"].astype('category').copy()
+
+        self.predictions = self.predictions.set_index("Image ID")
             
         self.prebuild_predictions = []
         self.prebuild_filenames = []
@@ -50,7 +52,15 @@ class Expert:
         fname: filename (id for the image)
         """
         #return np.array([self.predictions[self.predictions["Image ID"] == image_id][str(self.labelerId)].values for image_id in fnames]).ravel()
-        return np.array([self.predictions.loc[self.predictions["Image ID"] == image_id, str(self.labelerId)].values[0] for image_id in fnames])
+        #return np.array([self.predictions.loc[self.predictions["Image ID"] == image_id, str(self.labelerId)].values[0] for image_id in fnames])
+
+        #test_array = np.array([self.predictions.loc[self.predictions["Image ID"] == image_id, str(self.labelerId)].values[0] for image_id in fnames])
+        #new_array = np.array(self.predictions.set_index("Image ID").loc[fnames, str(self.labelerId)])
+
+
+        #assert (test_array == new_array).all()
+        #return new_array
+        return np.array(self.predictions.loc[fnames, str(self.labelerId)])
 
     def predictSLL(self, img, target, fnames):
         outputs = self.getSSLOutput(img, target, fnames)

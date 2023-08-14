@@ -292,6 +292,7 @@ def train_epoch(
             for param_group in optimizer.param_groups:
                 param_group["lr"] = lr
 
+        target_cpu = target
         target = target.to(device)
         input = input.to(device)
         hpred = hpred
@@ -314,7 +315,8 @@ def train_epoch(
             
             m2 = [0] * batch_size
             for j in range(0, batch_size):
-                if m[j] == target[j].item():
+                #if m[j] == target[j].item():
+                if m[j] == target[j]:
                     m[j] = 1
                     m2[j] = alpha
                 else:
@@ -402,6 +404,7 @@ def evaluate(model, expert_fns, loss_fn, n_classes, data_loader, config, print_m
     losses = []
     with torch.no_grad():
         for images, labels, hpred in data_loader:
+            labels_cpu = labels
             images, labels = images.to(device), labels.to(device)
         #for data in data_loader:
         #    images, labels, hpred = data
@@ -426,7 +429,8 @@ def evaluate(model, expert_fns, loss_fn, n_classes, data_loader, config, print_m
                 m = [0] * batch_size
                 m2 = [0] * batch_size
                 for j in range(0, batch_size):
-                    if exp_prediction1[j] == labels[j].item():
+                    #if exp_prediction1[j] == labels[j].item():
+                    if exp_prediction1[j] == labels_cpu[j]:
                         m[j] = 1
                         m2[j] = alpha
                     else:

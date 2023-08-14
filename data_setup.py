@@ -136,6 +136,7 @@ def main(args):
         unpackData(path)
         moveData(path)
         downloadLabels(path)
+        setupLabels(path)
     else:
         return
 
