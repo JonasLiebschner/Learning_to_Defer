@@ -466,7 +466,7 @@ def getExpertModels(indices, experts, train_dataset, val_dataset, test_dataset, 
         #expert_models.append(NetSimple(2, 3, 100, 100, 1000,500).to(device))
         model_folder = param["Parent_PATH"]+"/SSL_Working/NIH/Embedded"
         if param["cluster"]:
-            model_folder += f"/Seed_{seed}_Fold{fold}"
+            model_folder += f"/Seed_{seed}_Fold_{fold}"
             
         expert_models[labelerId] = ResnetPretrained(2, model_folder, type="50").to(device)
         if torch.cuda.device_count() > 1:
@@ -593,7 +593,7 @@ def getExpertModel(indices, train_dataset, val_dataset, test_dataset, expert, pa
     #model_expert = NetSimple(2, 3, 100, 100, 1000,500).to(device)
     model_folder = param["Parent_PATH"]+"/SSL_Working/NIH/Embedded"
     if param["cluster"]:
-        model_folder += f"/Seed_{seed}_Fold{fold}"
+        model_folder += f"/Seed_{seed}_Fold_{fold}"
         
     model_expert = ResnetPretrained(2, model_folder, type="50").to(device)
     if torch.cuda.device_count() > 1:
@@ -697,7 +697,7 @@ def getExpertModelNormal(indices, train_dataset, val_dataset, test_dataset, expe
     #model_expert = NetSimple(2, 3, 100, 100, 1000,500).to(device)
     model_folder = param["Parent_PATH"]+"/SSL_Working/NIH/Embedded"
     if param["cluster"]:
-        model_folder += f"/Seed_{seed}_Fold{fold}"
+        model_folder += f"/Seed_{seed}_Fold_{fold}"
     
     model_expert = ResnetPretrained(2, model_folder, type="50").to(device)
     if torch.cuda.device_count() > 1:
