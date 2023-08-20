@@ -316,7 +316,7 @@ def train_epoch(
             m2 = [0] * batch_size
             for j in range(0, batch_size):
                 #if m[j] == target[j].item():
-                if m[j] == target[j]:
+                if m[j] == target_cpu[j]:
                     m[j] = 1
                     m2[j] = alpha
                 else:

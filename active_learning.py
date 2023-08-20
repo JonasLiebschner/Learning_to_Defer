@@ -318,7 +318,7 @@ def getQbQPoints(expert_models, data_loader, budget, mod=None, param=None):
                 
                 preds = []
                 for i in range(outputs_exp.size()[0]):
-                    pred_exp = outputs_exp.data[i].detach().cpu().numpy()
+                    pred_exp = outputs_exp.data[i].cpu().numpy()
                     pred_exp = pred_exp[1]
                     #preds.append(round(pred_exp))
                     preds.append(pred_exp)
@@ -387,12 +387,12 @@ def getQbQPointsDifference(expert_models, data_loader, budget, mod=None, param=N
                 
                 preds = []
                 for i in range(outputs_exp.size()[0]):
-                    pred_exp = outputs_exp.data[i].detach().cpu().numpy()
+                    pred_exp = outputs_exp.data[i].cpu().numpy()
                     pred_exp = pred_exp[1]
                     #preds.append(round(pred_exp))
                     preds.append(pred_exp)
                     if (j == 0): #Add the indices only the first time
-                        indices_all.append(indices[i].detach().item())
+                        indices_all.append(indices[i].item())
             experts_preds.append(np.array(preds))
 
         if prediction_matrix is None:
@@ -787,10 +787,10 @@ def train_expert_confidence(train_loader, optimizer, scheduler, epoch, apply_sof
                 loss = my_CrossEntropyLoss(output, target)
         
         # measure accuracy and record loss
-        prec1 = accuracy(output.detach().data, target, topk=(1,))[0]
+        prec1 = accuracy(output.data, target, topk=(1,))[0]
         #losses.update(loss.data.item(), input.size(0))
-        losses.update(loss.detach().item(), input.size(0))
-        top1.update(prec1.detach().item(), input.size(0))
+        losses.update(loss.item(), input.size(0))
+        top1.update(prec1.item(), input.size(0))
 
         # compute gradient and do SGD step
         optimizer.zero_grad()
@@ -902,10 +902,10 @@ def metrics_print_expert(model, data_loader, expert=None, defer_net = False, id=
                 cou = 2
 
             total += labels.size(0)
-            correct += (predictions == labels).sum().detach().item()
+            correct += (predictions == labels).sum().item()
 
-            label_list.extend(labels.detach().cpu().numpy())
-            predictions_list.extend(predictions.detach().cpu().numpy())
+            label_list.extend(labels.cpu().numpy())
+            predictions_list.extend(predictions.cpu().numpy())
             
 
                              
