@@ -741,10 +741,10 @@ def run_experiment(param):
 
     runs = [{i:run[i] for i in run if i not in ["expert metrics", "verma", "hemmer"]} for run in expert_metrics_all]
 
-    if latest_file[0] != "M":
+    if "pickle" is not atest_file:
         latest_file = "Metrics_0.pickle"
 
-    count = int(latest_file[8:-7]) + 1
+    count = int(latest_file.split("/")[-1][8:-7]) + 1
     print(count)
 
     #Every pair of labeler ids
