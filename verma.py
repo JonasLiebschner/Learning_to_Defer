@@ -429,8 +429,11 @@ def evaluate(model, expert_fns, loss_fn, n_classes, data_loader, config, print_m
             collection_Ms = []  # a collection of 3-tuple
             for i, fn in enumerate(expert_fns, 0):
                 exp_prediction1 = fn(images, labels, hpred)
+
+                m = [1 if exp_prediction1[j] == labels_cpu[j] else 0 for j in range(batch_size)]
+                m2 = [alpha if el == 1 else 1 for el in m]
                 #exp_prediction1 = fn(hpred)
-                m = [0] * batch_size
+                """m = [0] * batch_size
                 m2 = [0] * batch_size
                 for j in range(0, batch_size):
                     #if exp_prediction1[j] == labels[j].item():
@@ -439,7 +442,7 @@ def evaluate(model, expert_fns, loss_fn, n_classes, data_loader, config, print_m
                         m2[j] = alpha
                     else:
                         m[j] = 0
-                        m2[j] = 1
+                        m2[j] = 1"""
 
                 m = torch.tensor(m, device=device)
                 m2 = torch.tensor(m2, device=device)
