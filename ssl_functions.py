@@ -343,7 +343,7 @@ def train_one_epoch(epoch,
         n_correct_u_lbs_meter.addTensor(corr_u_lb.sum())
         n_strong_aug_meter.addTensor(mask.sum())
 
-        if (it + 1) % 64 == 0:
+        if (it + 1) % 128 == 0:
 
             #Needed for optimized Meters
             loss_x_meter.getAverage()
