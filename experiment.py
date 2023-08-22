@@ -731,21 +731,23 @@ def run_experiment(param):
 
     expert_metrics_all = []
 
+    count = 0
+
     list_of_files = glob.glob(f'{param["Parent_PATH"]}/Metrics_Folder/*') # * means all if need specific format then *.csv
-    latest_file = max(list_of_files, key=os.path.getctime)
+    
+    if len(list_of_files) >= 1:
+        latest_file = max(list_of_files, key=os.path.getctime)
+      
+        print(f"Open metrics file: {latest_file}")
 
-    print(f"Open metrics file: {latest_file}")
+        with open(latest_file, 'rb') as handle:
+            expert_metrics_all = pickle.load(handle)
 
-    with open(latest_file, 'rb') as handle:
-        expert_metrics_all = pickle.load(handle)
+        runs = [{i:run[i] for i in run if i not in ["expert metrics", "verma", "hemmer"]} for run in expert_metrics_all]
 
-    runs = [{i:run[i] for i in run if i not in ["expert metrics", "verma", "hemmer"]} for run in expert_metrics_all]
+        if "pickle" in latest_file:
 
-    if "pickle" is not atest_file:
-        latest_file = "Metrics_0.pickle"
-
-    count = int(latest_file.split("/")[-1][8:-7]) + 1
-    print(count)
+            count = int(latest_file.split("/")[-1][8:-7]) + 1
 
     #Every pair of labeler ids
     for labeler_ids in param["LABELER_IDS"]:
@@ -895,8 +897,8 @@ def convert_list_to_string(li):
     return 
 
 
-CUDA_LAUNCH_BLOCKING=1
-torch.backends.cudnn.benchmark = True
+#CUDA_LAUNCH_BLOCKING=1
+#torch.backends.cudnn.benchmark = True
 
 
 # In[ ]:
