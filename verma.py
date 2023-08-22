@@ -425,7 +425,7 @@ def evaluate(model, expert_fns, loss_fn, n_classes, data_loader, config, print_m
             #batch_size = outputs.size()[0]  # batch_size
             batch_size = outputs.size(0)
 
-            """expert_predictions = []
+            expert_predictions = []
             collection_Ms = []  # a collection of 3-tuple
             for i, fn in enumerate(expert_fns, 0):
                 exp_prediction1 = fn(images, labels, hpred)
@@ -449,29 +449,21 @@ def evaluate(model, expert_fns, loss_fn, n_classes, data_loader, config, print_m
                 #End of optimization
                 
                 collection_Ms.append((m, m2))
-                expert_predictions.append(exp_prediction1)"""
+                expert_predictions.append(exp_prediction1)
 
-            expert_predictions = torch.tensor([fn(images, labels, hpred) for fn in expert_fns], device=device)
+            """expert_predictions = torch.tensor([fn(images, labels, hpred) for fn in expert_fns], device=device)
             collection_Ms = []
             
             for i, exp_prediction1 in enumerate(expert_predictions):
                 m = (exp_prediction1 == labels).int()
                 m2 = torch.where(exp_prediction1 == labels, alpha, 1.0)
-                collection_Ms.append((m, m2))
+                collection_Ms.append((m, m2))"""
 
             #assert torch.eq(collection_Ms, collection_Mss)
 
             loss = loss_fn(outputs, labels, collection_Ms, n_classes)
             losses.append(loss.detach().item())
 
-            
-
-            """expert_predictions = torch.stack([fn(images, labels, hpred) for fn in expert_fns])
-            m = (expert_predictions == labels.view(1, -1, 1)).float()
-            m2 = alpha * m + (1 - m)
-            
-            loss = loss_fn(outputs, labels, m, m2, n_classes)
-            losses.append(loss.detach().item())"""
 
             for i in range(batch_size):
                 r = predicted[i].item() >= n_classes - len(expert_fns)
