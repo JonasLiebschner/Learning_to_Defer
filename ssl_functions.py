@@ -510,9 +510,9 @@ def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded
         exp = exper(int(args["labelerId"]))
         
         dltrain_x, dltrain_u = sslDataset.get_train_loader_interface( 
-            exp, args["batchsize"], args["mu"], n_iters_per_epoch, L=args["n_labeled"], method='comatch')
+            exp, args["batchsize"], args["mu"], n_iters_per_epoch, L=args["n_labeled"], method='comatch', pin_memory=False)
         dlval = sslDataset.get_val_loader_interface(exp, batch_size=64, num_workers=param["num_worker"], fold_idx=fold_idx)
-        dlval = sslDataset.get_test_loader_interface(exp, batch_size=64, num_workers=param["num_worker"], fold_idx=fold_idx)
+        dtest = sslDataset.get_test_loader_interface(exp, batch_size=64, num_workers=param["num_worker"], fold_idx=fold_idx)
 
     wd_params, non_wd_params = [], []
     for name, params in model.named_parameters():
@@ -616,5 +616,6 @@ def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded
         }
         torch.save(save_obj, os.path.join(output_dir, 'ckp.latest'))
     _, _ = evaluate(model, ema_model, emb_model, dlval)
+    _, _ = evaluate(model, ema_model, emb_model, dtest)
 
     return emb_model, model
