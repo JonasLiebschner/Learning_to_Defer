@@ -130,11 +130,12 @@ class AverageMeterOptimized(object):
         self.count += 1
 
     def getAverage(self):
-        for tensor in self.tensors:
-            self.sum += tensor.item()
-        self.val = self.tensors[-1].item()
-        self.avg = self.sum / self.count
-        self.tensors.clear()
+        if len(self.tensors) >= 1:
+            for tensor in self.tensors:
+                self.sum += tensor.item()
+            self.val = self.tensors[-1].item()
+            self.avg = self.sum / self.count
+            self.tensors.clear()
 
 
 def time_str(fmt=None):
