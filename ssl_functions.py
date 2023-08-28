@@ -312,7 +312,7 @@ def train_one_epoch(epoch,
         
         loss = loss_x + args["lam_u"] * loss_u + args["lam_c"] * loss_contrast
         
-        optim.zero_grad()
+        optim.zero_grad(set_to_none=True)
         loss.backward()
         optim.step()
         lr_schdlr.step()
@@ -343,7 +343,8 @@ def train_one_epoch(epoch,
         n_correct_u_lbs_meter.addTensor(corr_u_lb.sum())
         n_strong_aug_meter.addTensor(mask.sum())
 
-        if (it + 1) % 128 == 0:
+        #if (it + 1) % 128 == 0:
+        if (it + 1) == n_iters:
 
             #Needed for optimized Meters
             loss_x_meter.getAverage()

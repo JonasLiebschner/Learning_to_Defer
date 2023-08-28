@@ -349,7 +349,7 @@ def train_epoch(
         top1.update(prec1.detach().item(), input.size(0))
 
         # compute gradient and do SGD step
-        optimizer.zero_grad()
+        optimizer.zero_grad(set_to_none=True)
         loss.backward()
         optimizer.step()
 
