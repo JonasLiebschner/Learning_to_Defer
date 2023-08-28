@@ -16,6 +16,7 @@ import torch.nn as nn
 from torch.utils.data.dataset import Dataset
 import torchvision
 from torchvision import transforms
+#import torchvision.transforms.v2 as transforms
 from PIL import Image
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import StratifiedKFold
@@ -934,7 +935,7 @@ class SSLDataset():
         return X, y
         
     
-    def get_train_loader_interface(self, expert, batch_size, mu, n_iters_per_epoch, L, method='comatch', imsize=(128, 128), fold_idx=0):
+    def get_train_loader_interface(self, expert, batch_size, mu, n_iters_per_epoch, L, method='comatch', imsize=(128, 128), fold_idx=0, pin_memory=False):
         labeler_id = expert.labeler_id
         
         data_x, label_x, data_u, label_u = self.getTrainDataset(labeler_id, fold_idx)
@@ -949,12 +950,13 @@ class SSLDataset():
             imsize=imsize
         )
         sampler_x = RandomSampler(ds_x, replacement=True, num_samples=n_iters_per_epoch * batch_size)
-        batch_sampler_x = BatchSampler(sampler_x, batch_size, drop_last=True)  # yield a batch of samples one time
+        #batch_sampler_x = BatchSampler(sampler_x, batch_size, drop_last=True)  # yield a batch of samples one time
+        batch_sampler_x = BatchSampler(sampler_x, batch_size, drop_last=False)  # yield a batch of samples one time
         dl_x = torch.utils.data.DataLoader(
             ds_x,
             batch_sampler=batch_sampler_x,
-            num_workers=self.num_workers,
-            pin_memory=False
+            num_workers=0,
+            pin_memory=True
         )
         if data_u is None:
             return dl_x
@@ -972,7 +974,7 @@ class SSLDataset():
                 ds_u,
                 batch_sampler=batch_sampler_u,
                 num_workers=self.num_workers,
-                pin_memory=False
+                pin_memory=pin_memory
             )
             return dl_x, dl_u
         
@@ -1131,7 +1133,7 @@ class NIH_SSL_Dataset(Dataset):
             #transforms.Resize(imsize[0]),
             
             T.PadandRandomCrop(border=4, cropsize=imsize),
-            #T.RandomHorizontalFlip(p=0.5),
+            T.RandomHorizontalFlip(p=0.5),
             RandomAugment(2, 10),
             #Normal way
             #T.Normalize(mean, std),
@@ -1139,13 +1141,13 @@ class NIH_SSL_Dataset(Dataset):
 
             #Optimization
             transforms.ToTensor(),
-            transforms.RandomHorizontalFlip(p=0.5),
+            #transforms.RandomHorizontalFlip(p=0.5),
             transforms.Normalize(mean, std),
         ])
         trans_strong1 = transforms.Compose([
             #transforms.ToPILImage(),
             transforms.ToTensor(),
-            transforms.RandomResizedCrop(imsize, scale=(0.2, 1.)),
+            transforms.RandomResizedCrop(imsize, scale=(0.2, 1.), antialias=True),
             transforms.RandomHorizontalFlip(p=0.5),
             transforms.RandomApply([
                 transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)
