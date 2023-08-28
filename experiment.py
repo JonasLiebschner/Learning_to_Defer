@@ -622,24 +622,71 @@ def L2D_Verma(train_loader, val_loader, test_loader, full_dataloader, expert_fns
 # In[15]:
 
 
-def one_run(dataManager, run_param):
+def one_run(dataManager, run_param, all_metrics, print_text, run_metrics, count, current_index=None):
+    """
+    Computes all seed-fold combinations for one parameter combination and saves the metrics into a file
+    
+    Param:
+        dataManager: DataManager for all data
+        run_param: dict of all relevant parameters for this run
+        all_metrics: list which contains all already computed results
+        print_text: output text to print the current paramater combination
+        run_metrics: core parameters for this run (which vary over different runs)
+        count: integer to identify the save file (and number of runs)
+        current_index: index of the current run in all_metrics, if it exists
+    """
 
+    #Get device for cuda training
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    #To ensure to only print the run text only one time
+    printed = False
+
+    #Metrics for this run
     expert_metrics = {}
     verma_metrics = {}
     hemmer_metrics = {}
 
-    for seed in run_param["SEEDS"]:
-        print("Seed: " + str(seed))
+    #Checks if there is data for this run in the save files
+    if current_index is not None:
+        #Load the current metrics
+        print(f"Current index: {current_index}")
+        current_metric = all_metrics[current_index]
+
+        #Save the already computed metrics in the working directories
+        expert_metrics = current_metric["expert metrics"]
+        verma_metrics = current_metric["verma"]
+        hemmer_metrics = current_metric["hemmer"]
+    #If not, create new element in list of all metrics
+    else:
+        all_metrics.append(run_metrics)
         
 
-        expert_metrics[seed] = {}
-        verma_metrics[seed] = {}
-        hemmer_metrics[seed] = {}
+    #Iterate over all seeds
+    for seed in run_param["SEEDS"]:
 
+        #If this seed is not already in the save file
+        if seed not in expert_metrics.keys():
+            print(f"New seed: {seed}")
+            expert_metrics[seed] = {}
+            verma_metrics[seed] = {}
+            hemmer_metrics[seed] = {}
+
+        #Iterate over the folds
         #for fold_idx in range(run_param["K"]):
-        for fold_idx in range(2):
+        for fold_idx in range(1):
+
+            #Check if the seed-fold combination is already in the save files
+            if fold_idx in expert_metrics[seed].keys():
+                continue
+            else:
+                print(f"Keys: {expert_metrics[seed].keys()}")
+                print(f"New fold: {fold_idx}")
+
+            #Print run text if at least one computation is made for this parameter combination (run)
+            if not printed:
+                print(print_text)
+                printed = True
 
             
             if run_param["cluster"]: #Keep the embedded model in cluster training
@@ -716,13 +763,22 @@ def one_run(dataManager, run_param):
                 "full": all_full_metrics,
             }
 
+            run_metrics["expert metrics"] = expert_metrics
+            run_metrics["verma"] = verma_metrics
+            run_metrics["hemmer"] = hemmer_metrics
+
+            #Write only into new file if a new run was computed
+            temp_count = count
+            if current_index is not None:
+                all_metrics[current_index] = run_metrics
+                temp_count = count - 1
+            else:
+                all_metrics[-1] = run_metrics
+            with open(f'{param["Parent_PATH"]}/Metrics_Folder/Metrics_{temp_count}.pickle', 'wb') as handle:
+                pickle.dump(all_metrics, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     return expert_metrics, verma_metrics, hemmer_metrics
             
-
-
-# In[16]:
-
 
 def run_experiment(param):
     run_param = copy.deepcopy(param)
@@ -827,10 +883,16 @@ def run_experiment(param):
                                                 metrics_save["sample_equal"] = sample_equal
                                                 metrics_save["epochs_pretrain"] = epochs_pretrain
 
+                                                
+                                                current_index = None
+                                                
+                                                #Compute the current index
                                                 if runs is not None:
+                                                    #If this parameter compination is in the already done runs
                                                     if metrics_save in runs:
-                                                        continue
-                                    
+                                                        #Get index of this combination
+                                                        current_index = runs.index(metrics_save)
+                                                        print(f"Current index: {current_index}")
                             
                                                 NEPTUNE = param["NEPTUNE"]["NEPTUNE"]
                                                 if param["NEPTUNE"]["NEPTUNE"]:
@@ -843,39 +905,46 @@ def run_experiment(param):
                                                     run["param"] = run_param
                                                     run_param["NEPTUNE"]["RUN"] = run
 
-                                                print("\n #####################################################################################")
-                                                print("\n \n \n NEW RUN \n")
-                                                print("Initial size: " + str(init_size))
-                                                print("Batch size: " + str(labels_per_round))
-                                                print("Max rounds: " + str(rounds))
-                                                print("Labeled: " + str(labeled))
-                                                print("Cost: " + str(cost))
-                                                print("Setting: " + str(setting))
-                                                print("Mod: " + str(mod))
-                                                print("Overlap: " + str(overlap))
-                                                print("Prediction Type " + str(expert_predict))
-                                                print("Sample equal " + str(sample_equal))
-                                                print("epochs_pretrain " + str(epochs_pretrain))
+                                                print_text = f"""\n \n \n #############################################################
+                                                NEW RUN
 
-                                            
-
+                                                Initial size: {init_size}
+                                                Batch size AL: {labels_per_round}
+                                                Max rounds: {rounds}
+                                                Labeled images: {labeled}
+                                                Cost: {cost}
+                                                Setting: {setting}
+                                                Mod: {mod}
+                                                Overlap: {overlap}
+                                                Prediction Type: {expert_predict}
+                                                Sample equal: {sample_equal}
+                                                Epochs pretrain: {epochs_pretrain}
+                                                """
 
                                                 start_time = time.time()
-                                                expert_metrics, verma_metrics, hemmer_metrics = one_run(dataManager, run_param)
+                                                #dataManager, run_param, all_metrics, print_text, run_metrics, count, current_index=None
+                                                expert_metrics, verma_metrics, hemmer_metrics = one_run(dataManager, run_param, expert_metrics_all.copy(), print_text, metrics_save,
+                                                                                                       count, current_index)
                                                 print("--- %s seconds ---" % (time.time() - start_time))
 
                                                 metrics_save["expert metrics"] = expert_metrics
                                                 metrics_save["verma"] = verma_metrics
                                                 metrics_save["hemmer"] = hemmer_metrics
-                                                expert_metrics_all.append(metrics_save)
-                                                with open(f'{param["Parent_PATH"]}/Metrics_Folder/Metrics_{count}.pickle', 'wb') as handle:
+                                                ensure_count = 0 #Helps to save into the correct file if metrics are added to a run
+                                                if current_index is not None:
+                                                    expert_metrics_all[current_index] = metrics_save
+                                                    ensure_count = 1
+                                                else:
+                                                    expert_metrics_all.append(metrics_save)
+                                                with open(f'{param["Parent_PATH"]}/Metrics_Folder/Metrics_{count - ensure_count}.pickle', 'wb') as handle:
                                                     pickle.dump(expert_metrics_all, handle, protocol=pickle.HIGHEST_PROTOCOL)
-                                                count += 1
+                                                if current_index is None:
+                                                    count += 1
                                                 if param["NEPTUNE"]["NEPTUNE"]:
                                                     run["metrics"] = metrics_save
 
                                                     run.stop()
-                                                return
+                                                #return
 
     return expert_metrics_all
 
@@ -920,15 +989,15 @@ def main(args):
         "LABELER_IDS": [[4323195249, 4295232296]],
         "K": 10, #Number of folds
         #"SEEDS": [1, 2, 3, 4, 42], #Seeds for the experiments
-        "SEEDS": [42], #Seeds for the experiments
+        "SEEDS": [1], #Seeds for the experiments
         "GT": True, # Determines if the classifier gets all data with GT Label or only the labeld data
         "MOD": ["confidence", "disagreement", "disagreement_diff", "ssl", "normal"], #Determines the experiment modus
 
         "OVERLAP": [0, 100],
         "SAMPLE_EQUAL": [False, True],
 
-        #"SETTING": ["AL", "SSL", "SSL_AL", "NORMAL", "SSL_AL_SSL"],
-        "SETTING": ["SSL_AL"],
+        "SETTING": ["AL", "SSL", "SSL_AL", "NORMAL", "SSL_AL_SSL"],
+        #"SETTING": ["SSL_AL"],
 
         "NUM_EXPERTS": 2,
         "NUM_CLASSES": 2,
@@ -1011,7 +1080,7 @@ def main(args):
 
         #Params for cluster training
         "num_worker": num_worker,
-        "cluster": True
+        "cluster": False
     }
 
     expert_metrics_all = run_experiment(param)
