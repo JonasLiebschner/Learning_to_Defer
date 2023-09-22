@@ -557,7 +557,7 @@ def getExpertModels(indices, experts, train_dataset, val_dataset, test_dataset, 
         met = testExpert(expert, test_dataset, image_container, param, learning_mod, prediction_type, seed, fold, data_name="Test", model=expert_models[labelerId])
         metrics[labelerId]["Test"]["End"] = met
 
-    return expert_models, met_test, metrics
+    return expert_models, met_test, metrics, all_data_filenames[indices_labeled]
 
 def getExpertModel(indices, train_dataset, val_dataset, test_dataset, expert, param=None, seed=None, fold=None, image_container=None, learning_mod="al", prediction_type="right"):
 
@@ -664,7 +664,7 @@ def getExpertModel(indices, train_dataset, val_dataset, test_dataset, expert, pa
     met = testExpert(expert, test_dataset, image_container, param, learning_mod, prediction_type, seed, fold, data_name="Test", model=model_expert)
     metrics["Test"]["End"] = met
 
-    return model_expert, met_test, metrics
+    return model_expert, met_test, metrics, all_data_filenames[indices_labeled]
 
 def getExpertModelNormal(indices, train_dataset, val_dataset, test_dataset, expert, param=None, seed=None, fold=None, image_container=None, learning_mod="al", prediction_type="right"):
 
