@@ -312,18 +312,22 @@ def train_epoch(
             # We assume each expert function has access to the extra metadata, even if they don't use it.
             m = fn(input, target, hpred)
             #m = fn(hpred)
+
+            #Possible optimization
+            m = [m[j] == target_cpu[j] for j in range(0, batch_size)]
+            m2 = [alpha if m[j] == target_cpu[j] else 1 for j in range(0, batch_size)]
             
-            m2 = [0] * batch_size
+            """m2 = [0] * batch_size
             for j in range(0, batch_size):
                 #if m[j] == target[j].item():
-                if m[j] == target[j]:
+                if m[j] == target_cpu[j]:
                     m[j] = 1
                     m2[j] = alpha
                 else:
                     m[j] = 0
                     m2[j] = 1
                 if classifier_only: #Set expert always to false, if only the classifier should be trained
-                    m[j] = 0
+                    m[j] = 0"""
             m = torch.tensor(m, device=device)
             m2 = torch.tensor(m2, device=device)
             #m = m.to(device)
@@ -336,7 +340,7 @@ def train_epoch(
 
         # compute loss
         loss = loss_fn(output, target, collection_Ms, n_classes)
-        epoch_train_loss.append(loss.item())
+        epoch_train_loss.append(loss)
 
         # measure accuracy and record loss
         prec1 = accuracy(output.data, target, topk=(1,))[0]
@@ -345,7 +349,7 @@ def train_epoch(
         top1.update(prec1.detach().item(), input.size(0))
 
         # compute gradient and do SGD step
-        optimizer.zero_grad()
+        optimizer.zero_grad(set_to_none=True)
         loss.backward()
         optimizer.step()
 
@@ -373,7 +377,7 @@ def train_epoch(
                 flush=True,
             )
 
-    return iters, np.average(epoch_train_loss)
+    return iters, np.average([loss.item() for loss in epoch_train_loss])
 
 
 def evaluate(model, expert_fns, loss_fn, n_classes, data_loader, config, print_m=True):
@@ -387,7 +391,7 @@ def evaluate(model, expert_fns, loss_fn, n_classes, data_loader, config, print_m
     loader: data loader
     """
     
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     correct = 0
     correct_sys = 0
@@ -425,8 +429,11 @@ def evaluate(model, expert_fns, loss_fn, n_classes, data_loader, config, print_m
             collection_Ms = []  # a collection of 3-tuple
             for i, fn in enumerate(expert_fns, 0):
                 exp_prediction1 = fn(images, labels, hpred)
+
+                m = [1 if exp_prediction1[j] == labels_cpu[j] else 0 for j in range(batch_size)]
+                m2 = [alpha if el == 1 else 1 for el in m]
                 #exp_prediction1 = fn(hpred)
-                m = [0] * batch_size
+                """m = [0] * batch_size
                 m2 = [0] * batch_size
                 for j in range(0, batch_size):
                     #if exp_prediction1[j] == labels[j].item():
@@ -435,13 +442,10 @@ def evaluate(model, expert_fns, loss_fn, n_classes, data_loader, config, print_m
                         m2[j] = alpha
                     else:
                         m[j] = 0
-                        m2[j] = 1
+                        m2[j] = 1"""
 
                 m = torch.tensor(m, device=device)
                 m2 = torch.tensor(m2, device=device)
-
-                #m = torch.tensor([1 if pred == label.item() else 0 for pred, label in zip(exp_prediction1, labels)])
-                #m2 = torch.tensor([alpha if pred == label.item() else 1 for pred, label in zip(exp_prediction1, labels)])
 
                 #collection_Ms.append((m.to(device), m2.to(device)))
                 #expert_predictions.append(exp_prediction1)
@@ -450,8 +454,19 @@ def evaluate(model, expert_fns, loss_fn, n_classes, data_loader, config, print_m
                 collection_Ms.append((m, m2))
                 expert_predictions.append(exp_prediction1)
 
+            """expert_predictions = torch.tensor([fn(images, labels, hpred) for fn in expert_fns], device=device)
+            collection_Ms = []
+            
+            for i, exp_prediction1 in enumerate(expert_predictions):
+                m = (exp_prediction1 == labels).int()
+                m2 = torch.where(exp_prediction1 == labels, alpha, 1.0)
+                collection_Ms.append((m, m2))"""
+
+            #assert torch.eq(collection_Ms, collection_Mss)
+
             loss = loss_fn(outputs, labels, collection_Ms, n_classes)
             losses.append(loss.detach().item())
+
 
             for i in range(batch_size):
                 r = predicted[i].item() >= n_classes - len(expert_fns)

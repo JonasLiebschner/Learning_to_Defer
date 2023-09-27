@@ -21,7 +21,7 @@ from torch.utils.tensorboard.writer import SummaryWriter
 
 from SSL.LinearModel import LinearNN
 import SSL.datasets.nih as nih
-from SSL.utils import accuracy, setup_default_logging, AverageMeter, WarmupCosineLrScheduler
+from SSL.utils import accuracy, setup_default_logging, AverageMeter, WarmupCosineLrScheduler, AverageMeterOptimized
 from SSL.utils import load_from_checkpoint
 #from SSL.Expert import CIFAR100Expert, NIHExpert
 from SSL.feature_extractor.embedding_model import EmbeddingModel as EmbeddingModelL
@@ -191,6 +191,8 @@ def train_one_epoch(epoch,
     """
 
     model.train()
+    #Old Code
+    """
     loss_x_meter = AverageMeter()
     loss_u_meter = AverageMeter()
     loss_contrast_meter = AverageMeter()
@@ -200,7 +202,19 @@ def train_one_epoch(epoch,
     n_strong_aug_meter = AverageMeter()
     mask_meter = AverageMeter()
     # the number of edges in the pseudo-label graph
-    pos_meter = AverageMeter()
+    pos_meter = AverageMeter()"""
+
+    #Optimized
+    loss_x_meter = AverageMeterOptimized()
+    loss_u_meter = AverageMeterOptimized()
+    loss_contrast_meter = AverageMeterOptimized()
+    # the number of correct pseudo-labels
+    n_correct_u_lbs_meter = AverageMeterOptimized()
+    # the number of confident unlabeled data
+    n_strong_aug_meter = AverageMeterOptimized()
+    mask_meter = AverageMeterOptimized()
+    # the number of edges in the pseudo-label graph
+    pos_meter = AverageMeterOptimized()
 
     
     epoch_start = time.time()  # start time
@@ -259,7 +273,14 @@ def train_one_epoch(epoch,
             mask = scores.ge(args["thr"]).float() 
                    
             feats_w = torch.cat([feats_u_w,feats_x],dim=0)   
-            onehot = torch.zeros(bt,args["n_classes"]).cuda().scatter(1,lbs_x.view(-1,1),1)
+            #Old
+            #onehot = torch.zeros(bt,args["n_classes"]).cuda().scatter(1,lbs_x.view(-1,1),1)
+            #Optimized
+            onehot = torch.zeros(bt, args["n_classes"], device="cuda")
+            onehot.scatter_(1, lbs_x.view(-1, 1), 1)
+
+
+            
             probs_w = torch.cat([probs_orig,onehot],dim=0)
             
             # update memory bank
@@ -291,7 +312,7 @@ def train_one_epoch(epoch,
         
         loss = loss_x + args["lam_u"] * loss_u + args["lam_c"] * loss_contrast
         
-        optim.zero_grad()
+        optim.zero_grad(set_to_none=True)
         loss.backward()
         optim.step()
         lr_schdlr.step()
@@ -299,8 +320,10 @@ def train_one_epoch(epoch,
         if args["eval_ema"]:
             with torch.no_grad():
                 ema_model_update(model, ema_model, args["ema_m"])
-                
-        loss_x_meter.update(loss_x.item())
+
+        #Old Code
+        
+        """loss_x_meter.update(loss_x.item())
         loss_u_meter.update(loss_u.item())
         loss_contrast_meter.update(loss_contrast.item())
         mask_meter.update(mask.mean().item())       
@@ -308,9 +331,31 @@ def train_one_epoch(epoch,
         
         corr_u_lb = (lbs_u_guess == lbs_u_real).float() * mask
         n_correct_u_lbs_meter.update(corr_u_lb.sum().item())
-        n_strong_aug_meter.update(mask.sum().item())
+        n_strong_aug_meter.update(mask.sum().item())"""
 
-        if (it + 1) % 64 == 0:
+        loss_x_meter.addTensor(loss_x)
+        loss_u_meter.addTensor(loss_u)
+        loss_contrast_meter.addTensor(loss_contrast)
+        mask_meter.addTensor(mask.mean())       
+        pos_meter.addTensor(pos_mask.sum(1).float().mean())
+        
+        corr_u_lb = (lbs_u_guess == lbs_u_real).float() * mask
+        n_correct_u_lbs_meter.addTensor(corr_u_lb.sum())
+        n_strong_aug_meter.addTensor(mask.sum())
+
+        #if (it + 1) % 128 == 0:
+        if (it + 1) == n_iters:
+
+            #Needed for optimized Meters
+            loss_x_meter.getAverage()
+            loss_u_meter.getAverage()
+            loss_contrast_meter.getAverage()
+            mask_meter.getAverage()      
+            pos_meter.getAverage()
+    
+            n_correct_u_lbs_meter.getAverage()
+            n_strong_aug_meter.getAverage()
+            
             t = time.time() - epoch_start
 
             lr_log = [pg['lr'] for pg in optim.param_groups]
@@ -321,6 +366,16 @@ def train_one_epoch(epoch,
                 args["dataset"], args["n_labeled"], args["seed"], args["exp_dir"], epoch, it + 1, loss_u_meter.avg, loss_x_meter.avg, loss_contrast_meter.avg, n_correct_u_lbs_meter.avg, n_strong_aug_meter.avg, mask_meter.avg, pos_meter.avg, lr_log, t))
             epoch_start = time.time()
 
+    #Needed for optimized Meters
+    loss_x_meter.getAverage()
+    loss_u_meter.getAverage()
+    loss_contrast_meter.getAverage()
+    mask_meter.getAverage()      
+    pos_meter.getAverage()
+    
+    n_correct_u_lbs_meter.getAverage()
+    n_strong_aug_meter.getAverage()
+            
     return loss_x_meter.avg, loss_u_meter.avg, loss_contrast_meter.avg, mask_meter.avg, pos_meter.avg, n_correct_u_lbs_meter.avg/n_strong_aug_meter.avg, queue_feats, queue_probs, queue_ptr, prob_list
 
 
@@ -456,9 +511,9 @@ def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded
         exp = exper(int(args["labelerId"]))
         
         dltrain_x, dltrain_u = sslDataset.get_train_loader_interface( 
-            exp, args["batchsize"], args["mu"], n_iters_per_epoch, L=args["n_labeled"], method='comatch')
+            exp, args["batchsize"], args["mu"], n_iters_per_epoch, L=args["n_labeled"], method='comatch', pin_memory=False)
         dlval = sslDataset.get_val_loader_interface(exp, batch_size=64, num_workers=param["num_worker"], fold_idx=fold_idx)
-        dlval = sslDataset.get_test_loader_interface(exp, batch_size=64, num_workers=param["num_worker"], fold_idx=fold_idx)
+        dtest = sslDataset.get_test_loader_interface(exp, batch_size=64, num_workers=param["num_worker"], fold_idx=fold_idx)
 
     wd_params, non_wd_params = [], []
     for name, params in model.named_parameters():
@@ -562,5 +617,6 @@ def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded
         }
         torch.save(save_obj, os.path.join(output_dir, 'ckp.latest'))
     _, _ = evaluate(model, ema_model, emb_model, dlval)
+    _, _ = evaluate(model, ema_model, emb_model, dtest)
 
     return emb_model, model

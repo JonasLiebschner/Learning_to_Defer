@@ -175,7 +175,7 @@ class Resnet(torch.nn.Module):
             if param["cluster"]:
                 path = train_dir + f"/NIH/Embedded/Seed_{seed}_Fold_{fold}/emb_net@dataset-nih-model-resnet" + type + "-num_classes-2/checkpoints/checkpoint.best"
             else:
-                path = train_dir + "/NIH/emb_net@dataset-nih-model-resnet" + type + "-num_classes-2/checkpoints/checkpoint.best"
+                path = train_dir + "/NIH/Embedded/emb_net@dataset-nih-model-resnet" + type + "-num_classes-2/checkpoints/checkpoint.best"
             print(self.load_my_state_dict(
                 torch.load(path),
                 strict=False))

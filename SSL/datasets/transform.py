@@ -28,7 +28,8 @@ class RandomHorizontalFlip(object):
 
     def __call__(self, im):
         if np.random.rand() < self.p:
-            im = im[:, ::-1, :]
+            #im = im[:, ::-1, :].copy()
+            im = np.flip(im, axis=1).copy() #Optimized
         return im
 
 
@@ -55,9 +56,11 @@ class Normalize(object):
         elif len(im.shape) == 3:
             mean, std = self.mean, self.std
         im = im.astype(np.float32) / 255.
+        print(type(im))
         #  im = (im.astype(np.float32) / 127.5) - 1
-        im -= mean
-        im /= std
+        #im -= mean
+        #im /= std
+        im = (im - mean) / std
         return im
 
 

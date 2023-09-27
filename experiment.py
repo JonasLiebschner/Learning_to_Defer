@@ -74,28 +74,14 @@ def set_seed(seed, fold=None, text=None):
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
 
-
-# In[3]:
-
-
-
-
 with open('neptune_config.json', 'r') as f:
     config = json.load(f)
 
 config_neptune = config["neptune"]
 
-
-# In[4]:
-
-
-
 def cleanTrainDir(path):
     shutil.rmtree(path)
-
-
-# In[21]:
-
+    
 
 def getExpertModelSSL_AL(dataManager, expert, labelerId, param=None, seed=None, fold=None, learning_mod="ssl", prediction_type="target"):
 
@@ -212,7 +198,7 @@ def getExpertModelSSL_AL(dataManager, expert, labelerId, param=None, seed=None, 
     
     #metrics["Test"] = met
     print("AL finished")
-    return met_test, metrics
+    return met_test, metrics, all_data_filenames[indices_labeled]
 
 
 # In[6]:
@@ -346,7 +332,7 @@ def getExpertModelsSSL_AL(dataManager, experts, param, seed, fold, learning_mod=
         met = al.testExpert(expert, test_dataset, image_container, param, learning_mod, prediction_type, seed, fold, data_name="Test")
         metrics[labelerId]["Test"]["End"] = met
         
-    return met_test, metrics
+    return met_test, metrics, all_data_filenames[indices_labeled]
 
 # In[7]:
 
@@ -365,21 +351,25 @@ def getExpertsSSL_AL(dataManager, param, fold, seed):
 
     embedded_model = ssl.create_embedded_model(dataloaders, param, param["NEPTUNE"], fold=fold, seed=seed)
 
+    indices = {}
     experts = {}
     for labelerId in param["LABELER_IDS"]:
-        nih_expert = expert_module.Expert(dataset = dataManager.getBasicDataset(), labeler_id=labelerId)
+        nih_expert = expert_module.Expert(dataset = dataManager.getBasicDataset(), labeler_id=labelerId, modus="ssl_al")
         emb_model, model = ssl.getExpertModelSSL(labelerId=labelerId, sslDataset=sslDataset, seed=seed, fold_idx=fold, n_labeled=None, embedded_model=embedded_model, param=param, neptune_param=param["NEPTUNE"])
         nih_expert.setModel(expert_module.SSLModel(emb_model, model), mod="SSL")
         experts[labelerId] = nih_expert
+        indices[labelerId] = sslDataset.getLabeledFilenames(labelerId, fold)
     metrics = {}
+    indices_labeled = {}
     if param["MOD"] == "confidence":
         for i, labelerId in enumerate(param["LABELER_IDS"]):
-            met, metrics_return = getExpertModelSSL_AL(dataManager=dataManager, expert=experts[labelerId], labelerId=labelerId, param=param, seed=seed, fold=fold, learning_mod="ssl", prediction_type=param["EXPERT_PREDICT"])
+            met, metrics_return, labeled = getExpertModelSSL_AL(dataManager=dataManager, expert=experts[labelerId], labelerId=labelerId, param=param, seed=seed, fold=fold, learning_mod="ssl", prediction_type=param["EXPERT_PREDICT"])
             metrics[labelerId] = metrics_return
+            indices_labeled[labelerId] = labeled
     elif param["MOD"] == "disagreement" or param["MOD"] == "disagreement_diff":
-        met, metrics = getExpertModelsSSL_AL(dataManager, experts, param, seed, fold, learning_mod="ssl", prediction_type=param["EXPERT_PREDICT"])
+        met, metrics, indices_labeled = getExpertModelsSSL_AL(dataManager, experts, param, seed, fold, learning_mod="ssl", prediction_type=param["EXPERT_PREDICT"])
         
-    return experts, metrics
+    return experts, metrics, {"starting labels": indices, "al labels": indices_labeled}
 
 
 # In[8]:
@@ -402,12 +392,15 @@ def getExpertsSSL(dataManager, param, fold, seed):
     torch.cuda.empty_cache()
     gc.collect()
 
+    indices = {}
+
     experts = {}
     for labelerId in param["LABELER_IDS"]:
-        nih_expert = expert_module.Expert(dataset = dataManager.getBasicDataset(), labeler_id=labelerId)
+        nih_expert = expert_module.Expert(dataset = dataManager.getBasicDataset(), labeler_id=labelerId, modus="ssl")
         emb_model, model = ssl.getExpertModelSSL(labelerId=labelerId, sslDataset=sslDataset, seed=seed, fold_idx=fold, n_labeled=None, embedded_model=None, param=param, neptune_param=param["NEPTUNE"])
         nih_expert.setModel(expert_module.SSLModel(emb_model, model), mod="SSL")
         experts[labelerId] = nih_expert
+        indices[labelerId] = sslDataset.getLabeledFilenames(labelerId, fold)
 
     nih_dataloader = dataManager.getKFoldDataloader(seed)
     expert_train, expert_val, expert_test = nih_dataloader.get_dataset_for_folder(fold)
@@ -430,7 +423,7 @@ def getExpertsSSL(dataManager, param, fold, seed):
             "End": met
         }
         
-    return experts, metrics
+    return experts, metrics, {"starting labels": indices}
 
 
 # In[9]:
@@ -479,21 +472,33 @@ def getExpertsAL(dataManager, param, fold_idx, seed):
     print("Random indices:")
     print(indices)
 
+    labeld_filenames = {}
+
+    indeces_al = {}
+
     experts = {}
     metrics = {}
     for i, labelerId in enumerate(list(param["LABELER_IDS"])):
-        nih_expert = expert_module.Expert(dataset = dataManager.getBasicDataset(), labeler_id=labelerId)
+        nih_expert = expert_module.Expert(dataset = dataManager.getBasicDataset(), labeler_id=labelerId, modus="al")
         experts[labelerId] = nih_expert
+        print("DELETE ME")
+        print("Drawn indices")
+        print(indices)
+        print(f"Len of all filenames: {len(expert_train_dataset.getAllFilenames())}")
+        print("All indices")
+        print(expert_train_dataset.getAllIndices())
+        labeld_filenames[labelerId] = np.array(expert_train_dataset.getAllFilenames())[indices[labelerId]]
         if param["MOD"] == "confidence":
-            expert_model, met_test, metric = al.getExpertModel(indices[labelerId], expert_train_dataset, expert_val_dataset, expert_test_dataset, nih_expert, param, seed, fold_idx, image_container=image_container, learning_mod="al", prediction_type=param["EXPERT_PREDICT"])
+            expert_model, met_test, metric, indices_labeled = al.getExpertModel(indices[labelerId], expert_train_dataset, expert_val_dataset, expert_test_dataset, nih_expert, param, seed, fold_idx, image_container=image_container, learning_mod="al", prediction_type=param["EXPERT_PREDICT"])
             nih_expert.setModel(expert_model, mod="AL")
             metrics[labelerId] = metric
+            indeces_al[labelerId] = indices_labeled
     if param["MOD"] == "disagreement" or param["MOD"]=="disagreement_diff":
-        expert_models, met, metrics = al.getExpertModels(indices, experts, expert_train_dataset, expert_val_dataset, expert_test_dataset, param, seed, fold_idx, mod=param["MOD"], image_container=image_container, learning_mod="al", prediction_type=param["EXPERT_PREDICT"])
+        expert_models, met, metrics, indeces_al = al.getExpertModels(indices, experts, expert_train_dataset, expert_val_dataset, expert_test_dataset, param, seed, fold_idx, mod=param["MOD"], image_container=image_container, learning_mod="al", prediction_type=param["EXPERT_PREDICT"])
         for labelerId, expert in experts.items():
             expert.setModel(expert_models[labelerId], mod="AL")
 
-    return experts, metrics
+    return experts, metrics, {"starting labels": labeld_filenames, "al labels": indeces_al}
 
 
 # In[11]:
@@ -525,18 +530,21 @@ def getExpertsNormal(dataManager, param, fold_idx, seed):
     print("Random indices:")
     print(indices)
 
+    labeled_filenames = {}
+
     experts = {}
     #Create the experts
     metrics = {}
     for i, labelerId in enumerate(list(param["LABELER_IDS"])):
-        nih_expert = expert_module.Expert(dataset = dataManager.getBasicDataset(), labeler_id=labelerId)
+        nih_expert = expert_module.Expert(dataset = dataManager.getBasicDataset(), labeler_id=labelerId, modus="normal")
         experts[labelerId] = nih_expert
+        labeld_filenames[labelerId] = np.array(expert_train_dataset.getAllFilenames())[indices[labelerId]]
 
         model, met, metric = al.getExpertModelNormal(indices[labelerId], expert_train_dataset, expert_val_dataset, expert_test_dataset, nih_expert, param, seed, fold_idx, image_container=image_container, learning_mod="al", prediction_type=param["EXPERT_PREDICT"])
         nih_expert.setModel(model, mod="AL")
         metrics[labelerId] = metric
 
-    return experts, metrics
+    return experts, metrics, {"starting labels": labeled_filenames}
 
 
 # In[12]:
@@ -546,7 +554,7 @@ def getExpertsPerfect(dataManager, param, fold, seed):
 
     experts = {}
     for i, labelerId in enumerate(list(param["LABELER_IDS"])):
-        nih_expert = expert_module.Expert(dataset = dataManager.getBasicDataset(), labeler_id=labelerId)
+        nih_expert = expert_module.Expert(dataset = dataManager.getBasicDataset(), labeler_id=labelerId, modus="perfect")
         experts[labelerId] = nih_expert
 
 
@@ -591,15 +599,15 @@ def getExperts(dataManager, param, seed, fold):
     if param["SETTING"] == "PERFECT":
         experts, metrics = getExpertsPerfect(dataManager, param, fold, seed)
     if param["SETTING"] == "AL":
-        experts, metrics = getExpertsAL(dataManager, param, fold, seed)
+        experts, metrics, labeled_filenames = getExpertsAL(dataManager, param, fold, seed)
     elif param["SETTING"] == "SSL":
-        experts, metrics = getExpertsSSL(dataManager, param, fold, seed)
+        experts, metrics, labeled_filenames = getExpertsSSL(dataManager, param, fold, seed)
     elif param["SETTING"] == "SSL_AL" or param["SETTING"] == "SSL_AL_SSL":
-        experts, metrics = getExpertsSSL_AL(dataManager, param, fold, seed)
+        experts, metrics, labeled_filenames = getExpertsSSL_AL(dataManager, param, fold, seed)
     elif param["SETTING"] == "NORMAL":
-        experts, metrics = getExpertsNormal(dataManager, param, fold, seed)
+        experts, metrics, labeled_filenames = getExpertsNormal(dataManager, param, fold, seed)
 
-    return experts, metrics
+    return experts, metrics, labeled_filenames
 
 
 # In[14]:
@@ -619,27 +627,79 @@ def L2D_Verma(train_loader, val_loader, test_loader, full_dataloader, expert_fns
     return metrics_train_all, metrics_val_all, metrics_test, metrics_full, metrics_pretrain_all
 
 
-# In[15]:
+
+def create_gt_label(experts, dataloader, method="simple"):
+    return None
 
 
-def one_run(dataManager, run_param):
+def one_run(dataManager, run_param, all_metrics, print_text, run_metrics, count, current_index=None):
+    """
+    Computes all seed-fold combinations for one parameter combination and saves the metrics into a file
+    
+    Param:
+        dataManager: DataManager for all data
+        run_param: dict of all relevant parameters for this run
+        all_metrics: list which contains all already computed results
+        print_text: output text to print the current paramater combination
+        run_metrics: core parameters for this run (which vary over different runs)
+        count: integer to identify the save file (and number of runs)
+        current_index: index of the current run in all_metrics, if it exists
+    """
 
+    #Get device for cuda training
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    #To ensure to only print the run text only one time
+    printed = False
+
+    #Metrics for this run
     expert_metrics = {}
     verma_metrics = {}
     hemmer_metrics = {}
+    
+    metrics_added = False
 
-    for seed in run_param["SEEDS"]:
-        print("Seed: " + str(seed))
+    #Checks if there is data for this run in the save files
+    if current_index is not None:
+        #Load the current metrics
+        print(f"Current index: {current_index}")
+        current_metric = all_metrics[current_index]
+
+        #Save the already computed metrics in the working directories
+        expert_metrics = current_metric["expert metrics"]
+        verma_metrics = current_metric["verma"]
+        hemmer_metrics = current_metric["hemmer"]
+    #If not, create new element in list of all metrics
+    else:
+        all_metrics.append(run_metrics)
         
 
-        expert_metrics[seed] = {}
-        verma_metrics[seed] = {}
-        hemmer_metrics[seed] = {}
+    #Iterate over all seeds
+    for seed in run_param["SEEDS"]:
 
+        #If this seed is not already in the save file
+        if seed not in expert_metrics.keys():
+            print(f"New seed: {seed}")
+            expert_metrics[seed] = {}
+            verma_metrics[seed] = {}
+            hemmer_metrics[seed] = {}
+
+        #Iterate over the folds
         #for fold_idx in range(run_param["K"]):
-        for fold_idx in range(2):
+        for fold_idx in range(3):
+
+            #Check if the seed-fold combination is already in the save files
+            if fold_idx in expert_metrics[seed].keys():
+                continue
+            else:
+                print(f"Keys: {expert_metrics[seed].keys()}")
+                print(f"New fold: {fold_idx}")
+                metrics_added = True
+
+            #Print run text if at least one computation is made for this parameter combination (run)
+            if not printed:
+                print(print_text)
+                printed = True
 
             
             if run_param["cluster"]: #Keep the embedded model in cluster training
@@ -666,7 +726,7 @@ def one_run(dataManager, run_param):
             torch.cuda.empty_cache()
             gc.collect()
 
-            experts, expert_metric = getExperts(dataManager, run_param, seed, fold_idx)
+            experts, expert_metric, labeled_filenames = getExperts(dataManager, run_param, seed, fold_idx)
             expert_metrics[seed][fold_idx] = expert_metric
 
             torch.cuda.empty_cache()
@@ -697,6 +757,14 @@ def one_run(dataManager, run_param):
                 elif run_param["SETTING"] == "PERFECT":
                     expert_fns.append(expert.predict)
 
+            #print("DELETE ME")
+            #return experts, dataManager, labeled_filenames
+
+            #Block to create df of artificial labels, real predictions and which images were labeled
+            fullDataset = nih_dataloader.getFullDataloader().dataset
+            labeled_df = save_expert_labels(fullDataset, experts, labeled_filenames)
+            
+
             metrics_train_all, metrics_val_all, metrics_test_all, metrics_full_all, metrics_pretrain_all = L2D_Verma(train_loader, val_loader, test_loader, full_dataloader, expert_fns, run_param, seed, fold_idx, experts=experts)
 
             verma_metrics[seed][fold_idx] = {
@@ -716,13 +784,26 @@ def one_run(dataManager, run_param):
                 "full": all_full_metrics,
             }
 
+            run_metrics["artificial expert predictions"] = labeled_df
 
-    return expert_metrics, verma_metrics, hemmer_metrics
+            run_metrics["expert metrics"] = expert_metrics
+            run_metrics["verma"] = verma_metrics
+            run_metrics["hemmer"] = hemmer_metrics
+
+            #Write only into new file if a new run was computed
+            temp_count = count
+            if current_index is not None:
+                all_metrics[current_index] = run_metrics
+                temp_count = count - 1
+            else:
+                all_metrics[-1] = run_metrics
+            with open(f'{run_param["Parent_PATH"]}/Metrics_Folder/Metrics_{temp_count}.pickle', 'wb') as handle:
+                pickle.dump(all_metrics, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+
+    return expert_metrics, verma_metrics, hemmer_metrics, metrics_added, labeled_df
+
             
-
-
-# In[16]:
-
 
 def run_experiment(param):
     run_param = copy.deepcopy(param)
@@ -731,21 +812,23 @@ def run_experiment(param):
 
     expert_metrics_all = []
 
+    count = 0
+
     list_of_files = glob.glob(f'{param["Parent_PATH"]}/Metrics_Folder/*') # * means all if need specific format then *.csv
-    latest_file = max(list_of_files, key=os.path.getctime)
+    
+    if len(list_of_files) >= 1:
+        latest_file = max(list_of_files, key=os.path.getctime)
+      
+        print(f"Open metrics file: {latest_file}")
 
-    print(f"Open metrics file: {latest_file}")
+        with open(latest_file, 'rb') as handle:
+            expert_metrics_all = pickle.load(handle)
 
-    with open(latest_file, 'rb') as handle:
-        expert_metrics_all = pickle.load(handle)
+        runs = [{i:run[i] for i in run if i not in ["expert metrics", "verma", "hemmer"]} for run in expert_metrics_all]
 
-    runs = [{i:run[i] for i in run if i not in ["expert metrics", "verma", "hemmer"]} for run in expert_metrics_all]
+        if "pickle" in latest_file:
 
-    if latest_file[0] != "M":
-        latest_file = "Metrics_0.pickle"
-
-    count = int(latest_file[8:-7]) + 1
-    print(count)
+            count = int(latest_file.split("/")[-1][8:-7]) + 1
 
     #Every pair of labeler ids
     for labeler_ids in param["LABELER_IDS"]:
@@ -825,10 +908,16 @@ def run_experiment(param):
                                                 metrics_save["sample_equal"] = sample_equal
                                                 metrics_save["epochs_pretrain"] = epochs_pretrain
 
+                                                
+                                                current_index = None
+                                                
+                                                #Compute the current index
                                                 if runs is not None:
+                                                    #If this parameter compination is in the already done runs
                                                     if metrics_save in runs:
-                                                        continue
-                                    
+                                                        #Get index of this combination
+                                                        current_index = runs.index(metrics_save)
+                                                        print(f"Current index: {current_index}")
                             
                                                 NEPTUNE = param["NEPTUNE"]["NEPTUNE"]
                                                 if param["NEPTUNE"]["NEPTUNE"]:
@@ -841,39 +930,50 @@ def run_experiment(param):
                                                     run["param"] = run_param
                                                     run_param["NEPTUNE"]["RUN"] = run
 
-                                                print("\n #####################################################################################")
-                                                print("\n \n \n NEW RUN \n")
-                                                print("Initial size: " + str(init_size))
-                                                print("Batch size: " + str(labels_per_round))
-                                                print("Max rounds: " + str(rounds))
-                                                print("Labeled: " + str(labeled))
-                                                print("Cost: " + str(cost))
-                                                print("Setting: " + str(setting))
-                                                print("Mod: " + str(mod))
-                                                print("Overlap: " + str(overlap))
-                                                print("Prediction Type " + str(expert_predict))
-                                                print("Sample equal " + str(sample_equal))
-                                                print("epochs_pretrain " + str(epochs_pretrain))
+                                                print_text = f"""\n \n \n #############################################################
+                                                NEW RUN
 
-                                            
-
+                                                Initial size: {init_size}
+                                                Batch size AL: {labels_per_round}
+                                                Max rounds: {rounds}
+                                                Labeled images: {labeled}
+                                                Cost: {cost}
+                                                Setting: {setting}
+                                                Mod: {mod}
+                                                Overlap: {overlap}
+                                                Prediction Type: {expert_predict}
+                                                Sample equal: {sample_equal}
+                                                Epochs pretrain: {epochs_pretrain}
+                                                """
 
                                                 start_time = time.time()
-                                                expert_metrics, verma_metrics, hemmer_metrics = one_run(dataManager, run_param)
+                                                #dataManager, run_param, all_metrics, print_text, run_metrics, count, current_index=None
+                                                expert_metrics, verma_metrics, hemmer_metrics, metrics_added, labeled_df = one_run(dataManager, run_param, expert_metrics_all.copy(), print_text, metrics_save, count, current_index)
+
+                                                #print("DELETE ME")
+                                                #return one_run(dataManager, run_param, expert_metrics_all.copy(), print_text, metrics_save, count, current_index)
+                                                
                                                 print("--- %s seconds ---" % (time.time() - start_time))
 
+                                                metrics_save["artificial expert predictions"] = labeled_df
                                                 metrics_save["expert metrics"] = expert_metrics
                                                 metrics_save["verma"] = verma_metrics
                                                 metrics_save["hemmer"] = hemmer_metrics
-                                                expert_metrics_all.append(metrics_save)
-                                                with open(f'{param["Parent_PATH"]}/Metrics_Folder/Metrics_{count}.pickle', 'wb') as handle:
-                                                    pickle.dump(expert_metrics_all, handle, protocol=pickle.HIGHEST_PROTOCOL)
-                                                count += 1
+                                                ensure_count = 0 #Helps to save into the correct file if metrics are added to a run
+                                                if current_index is not None:
+                                                    expert_metrics_all[current_index] = metrics_save
+                                                    ensure_count = 1
+                                                else:
+                                                    expert_metrics_all.append(metrics_save)
+                                                if metrics_added:
+                                                    with open(f'{param["Parent_PATH"]}/Metrics_Folder/Metrics_{count - ensure_count}.pickle', 'wb') as handle:
+                                                        pickle.dump(expert_metrics_all, handle, protocol=pickle.HIGHEST_PROTOCOL)
+                                                if current_index is None:
+                                                    count += 1
                                                 if param["NEPTUNE"]["NEPTUNE"]:
                                                     run["metrics"] = metrics_save
 
                                                     run.stop()
-                                                return
 
     return expert_metrics_all
 
@@ -895,8 +995,90 @@ def convert_list_to_string(li):
     return 
 
 
-CUDA_LAUNCH_BLOCKING=1
-torch.backends.cudnn.benchmark = True
+def save_expert_labels(fullDataset, experts, labeled_filenames):
+    true_labels = build_experts_prediction_df(fullDataset, experts)
+    artificial_labels = get_labeled_images_df(labeled_filenames)
+
+    label_df = pd.merge(true_labels, artificial_labels, how="outer")
+    return label_df
+
+#Functions to create the predictions
+
+def build_experts_prediction_df(fullDataset, experts):
+    """
+    Creates a df which contains the filename, gt, [true_prediction, artificial_prediction for every expert]
+    """
+    label_df = create_label_df(fullDataset, experts)
+    label_df.columns = [process_name_expert_artificial_labels(column) if "prediction" in column else column for column in list(label_df.columns)]
+
+    true_experts = create_true_expert_labels(fullDataset, experts)
+
+    return pd.merge(true_experts, label_df)
+
+def create_true_expert_labels(dataset, experts):
+    """
+    Creates a df with filename, gt, [true expert predictions]
+    """
+    gt = pd.DataFrame({"filename": dataset.getAllFilenames(), "gt": dataset.getAllTargets()})
+    result = gt.copy()
+    for expert_id, expert in experts.items():
+        expert_df = expert.predictions.reset_index(names="filename")
+        expert_df.columns = [column + "_true_prediction" if "filename" not in column else column for column in list(expert_df.columns)]
+        result = pd.merge(result, expert_df)
+    return result
+
+def create_label_df(dataset, experts):
+    """
+    Creates a df with filename, gt, [artificial expert predictions]
+    """
+    gt = pd.DataFrame({"filename": dataset.getAllFilenames(), "gt": dataset.getAllTargets()})
+    result = gt.copy()
+    for expert_id, expert in experts.items():
+        if "ssl" in expert.modus:
+            expert_df = pd.DataFrame({"filename": expert.prebuild_filenames_ssl, f"prediction_{expert_id}": expert.prebuild_predictions_ssl})
+        else:
+            expert_df = pd.DataFrame({"filename": expert.prebuild_filenames_al, f"prediction_{expert_id}": expert.prebuild_predictions_al})
+        result = pd.merge(result, expert_df)
+    return result
+
+#Functions to create the artificial
+def swap_prediction_id(name):
+    result = ""
+    for element in name.split("_")[::-1]:
+        result += element + "_"
+    return result[:-1]
+print(swap_prediction_id("prediction_4295349121"))
+
+def process_name_expert_artificial_labels(name):
+    result = ""
+    for element in swap_prediction_id(name).split("_"):
+        if "prediction" in element:
+            result += "artificial_"
+        result += element + "_"
+    return result[:-1]
+
+def get_labeled_images_df(labeled_filenames):
+    """
+    Creates a df which contains the filename, [if initial labeled, if labeled after al for ever expert]
+    """
+    dfs = []
+    for labelerId, filelist in labeled_filenames["starting labels"].items():
+        dfs.append(pd.DataFrame({"filename": filelist, f"{labelerId}_starting_label": [1 for i in range(len(filelist))]}))
+    starting_labels = dfs[0]
+    for i in range(1, len(dfs)):
+        starting_labels = pd.merge(starting_labels, dfs[i], how="outer")
+
+    dfs = []
+    for labelerId, filelist in labeled_filenames["al labels"].items():
+        dfs.append(pd.DataFrame({"filename": filelist, f"{labelerId}_al_label": [1 for i in range(len(filelist))]}))
+    al_labels = dfs[0]
+    for i in range(1, len(dfs)):
+        al_labels = pd.merge(al_labels, dfs[i], how="outer")
+
+    return pd.merge(starting_labels, al_labels, how="outer")
+
+#CUDA_LAUNCH_BLOCKING=1
+#torch.backends.cudnn.benchmark = True
 
 
 # In[ ]:
@@ -915,15 +1097,18 @@ def main(args):
         "PATH": f"{path}/Datasets/NIH/",
         "Parent_PATH": path,
         "TARGET": "Airspace_Opacity",
-        "LABELER_IDS": [[4323195249, 4295232296]],
+        "LABELER_IDS": [[4323195249, 4295232296], [4295349121, 4295342357], [4295342357, 4295354117]],
         "K": 10, #Number of folds
-        #"SEEDS": [1, 2, 3, 4, 42], #Seeds for the experiments
-        "SEEDS": [42], #Seeds for the experiments
+        "SEEDS": [1, 2, 3, 4], #Seeds for the experiments
+        #"SEEDS": [1], #Seeds for the experiments
         "GT": True, # Determines if the classifier gets all data with GT Label or only the labeld data
-        "MOD": ["confidence", "disagreement", "disagreement_diff", "ssl", "normal"], #Determines the experiment modus
+        #"MOD": ["confidence", "disagreement", "disagreement_diff", "ssl", "normal"], #Determines the experiment modus
+        "MOD": ["confidence"], #Determines the experiment modus
 
         "OVERLAP": [0, 100],
+        #"OVERLAP": [0],
         "SAMPLE_EQUAL": [False, True],
+        #"SAMPLE_EQUAL": [True],
 
         #"SETTING": ["AL", "SSL", "SSL_AL", "NORMAL", "SSL_AL_SSL"],
         "SETTING": ["SSL_AL"],
@@ -931,7 +1116,8 @@ def main(args):
         "NUM_EXPERTS": 2,
         "NUM_CLASSES": 2,
 
-        "EXPERT_PREDICT": ["right", "target"],
+        #"EXPERT_PREDICT": ["right", "target"],
+        "EXPERT_PREDICT": ["target"],
 
         "AL": { #Parameter for Active Learning
             "INITIAL_SIZE": [4, 8, 16, 32], #
@@ -939,10 +1125,11 @@ def main(args):
             "n_dataset": 2, #Number Classes
             "BATCH_SIZE": 4,
             "BATCH_SIZE_VAL": 32,
-            "ROUNDS": [2, 4, 8],
+            "ROUNDS": [2, 4],
             "LABELS_PER_ROUND": [4, 8, 16],
             "EPOCHS_DEFER": 10,
-            "COST": [(0, 0), (5, 0)], #Cost for Cost sensitiv learning
+            #"COST": [(0, 0), (5, 0)], #Cost for Cost sensitiv learning
+            "COST": [(0, 0)],
             #"TRAIN REJECTOR": False,
             "PRELOAD": True,
             "PREPROCESS": True,

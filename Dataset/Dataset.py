@@ -16,6 +16,7 @@ import torch.nn as nn
 from torch.utils.data.dataset import Dataset
 import torchvision
 from torchvision import transforms
+import torchvision.transforms.v2 as transforms2
 from PIL import Image
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import StratifiedKFold
@@ -49,7 +50,7 @@ class BasicDataset:
         """
         Returns the data for the given expert
         """
-        return result["Image ID", "GT", str(id)]
+        return self.data[["Patient ID", "Image ID", "GT", str(id)]].copy()
 
     def getData(self):
         """
@@ -89,8 +90,7 @@ class NIHDataset:
 
         self.images = []
 
-        #self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.device = None
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
         self.preload = preload
         self.preprocess = preprocess
@@ -105,6 +105,8 @@ class NIHDataset:
 
         self.image_container = image_container
         self.size = size
+
+        self.transformed_images = {}
         
         if ((self.preload) or (self.image_container is not None)):
             self.loadImages()
@@ -160,17 +162,23 @@ class NIHDataset:
         """
         Transforms the image
         """
-        #print("transformed")
-        if self.device is None:
-            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         return self.tfms(image)#.to(self.device)
+
+    def getTransformedImage(self, image, image_id):
+        """
+        Transforms the image
+        """
+        if image_id not in self.transformed_images.keys():
+            self.transformed_images[image_id] = self.tfms(image)
+        return self.transformed_images[image_id]
         
     def __getitem__(self, index: int) -> Tuple[Any, Any]:
         filename, target = self.image_ids[index], self.targets[index]
         img = self.getImage(index)
         
         if not self.preprocess:
-            img = self.transformImage(img)
+            #img = self.transformImage(img)
+            img = self.getTransformedImage(img, filename)#.to(self.device)
         return img, target, filename
 
     def __len__(self) -> int:
@@ -927,7 +935,7 @@ class SSLDataset():
         return X, y
         
     
-    def get_train_loader_interface(self, expert, batch_size, mu, n_iters_per_epoch, L, method='comatch', imsize=(128, 128), fold_idx=0):
+    def get_train_loader_interface(self, expert, batch_size, mu, n_iters_per_epoch, L, method='comatch', imsize=(128, 128), fold_idx=0, pin_memory=False):
         labeler_id = expert.labeler_id
         
         data_x, label_x, data_u, label_u = self.getTrainDataset(labeler_id, fold_idx)
@@ -942,12 +950,13 @@ class SSLDataset():
             imsize=imsize
         )
         sampler_x = RandomSampler(ds_x, replacement=True, num_samples=n_iters_per_epoch * batch_size)
-        batch_sampler_x = BatchSampler(sampler_x, batch_size, drop_last=True)  # yield a batch of samples one time
+        #batch_sampler_x = BatchSampler(sampler_x, batch_size, drop_last=True)  # yield a batch of samples one time
+        batch_sampler_x = BatchSampler(sampler_x, batch_size, drop_last=False)  # yield a batch of samples one time
         dl_x = torch.utils.data.DataLoader(
             ds_x,
             batch_sampler=batch_sampler_x,
-            num_workers=self.num_workers,
-            pin_memory=False
+            num_workers=0,
+            pin_memory=True
         )
         if data_u is None:
             return dl_x
@@ -964,7 +973,7 @@ class SSLDataset():
             dl_u = torch.utils.data.DataLoader(
                 ds_u,
                 batch_sampler=batch_sampler_u,
-                num_workers=self.num_workers,
+                num_workers=4,
                 pin_memory=False
             )
             return dl_x, dl_u
@@ -1112,26 +1121,39 @@ class NIH_SSL_Dataset(Dataset):
         trans_weak = T.Compose([
             T.Resize(imsize),
             T.PadandRandomCrop(border=4, cropsize=imsize),
-            T.RandomHorizontalFlip(p=0.5),
-            T.Normalize(mean, std),
-            T.ToTensor(),
+            #T.RandomHorizontalFlip(p=0.5),
+            #T.Normalize(mean, std),
+            #T.ToTensor(),
+            transforms.ToTensor(),
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.Normalize(mean, std),
         ])
         trans_strong0 = T.Compose([
             T.Resize(imsize),
+            #transforms.Resize(imsize[0]),
+            
             T.PadandRandomCrop(border=4, cropsize=imsize),
             T.RandomHorizontalFlip(p=0.5),
             RandomAugment(2, 10),
-            T.Normalize(mean, std),
-            T.ToTensor(),
+            #Normal way
+            #T.Normalize(mean, std),
+            #T.ToTensor(),
+
+            #Optimization
+            transforms.ToTensor(),
+            #transforms.RandomHorizontalFlip(p=0.5),
+            transforms.Normalize(mean, std),
         ])
         trans_strong1 = transforms.Compose([
             transforms.ToPILImage(),
-            transforms.RandomResizedCrop(imsize, scale=(0.2, 1.)),
+            #transforms.ToTensor(),
+            transforms.RandomResizedCrop(imsize, scale=(0.2, 1.), antialias=True),
             transforms.RandomHorizontalFlip(p=0.5),
             transforms.RandomApply([
-                transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)
+                transforms2.ColorJitter(0.4, 0.4, 0.4, 0.1)
             ], p=0.8),
             transforms.RandomGrayscale(p=0.2),
+            #T.Normalize(mean, std),
             transforms.ToTensor(),
             transforms.Normalize(mean, std),
         ])
@@ -1144,8 +1166,10 @@ class NIH_SSL_Dataset(Dataset):
         else:
             self.trans = T.Compose([
                 T.Resize(imsize),
-                T.Normalize(mean, std),
-                T.ToTensor(),
+                #T.Normalize(mean, std),
+                #T.ToTensor(),
+                transforms.ToTensor(),
+                transforms.Normalize(mean, std),
             ])
             
     def loadImages(self):
