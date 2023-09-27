@@ -19,7 +19,7 @@ import torch.utils.data
 import sklearn
 
 class Expert:
-    def __init__(self, dataset, labeler_id, modus="perfect", param=None, nLabels=800, prob=0.5):
+    def __init__(self, dataset, labeler_id, modus, param=None, nLabels=800, prob=0.5):
         self.labelerId = labeler_id
         self.dataset = dataset
         self.data = dataset.getData()[["Image ID", str(self.labelerId)]]
