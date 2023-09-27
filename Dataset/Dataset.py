@@ -16,7 +16,7 @@ import torch.nn as nn
 from torch.utils.data.dataset import Dataset
 import torchvision
 from torchvision import transforms
-#import torchvision.transforms.v2 as transforms
+import torchvision.transforms.v2 as transforms2
 from PIL import Image
 from sklearn.metrics import accuracy_score
 from sklearn.model_selection import StratifiedKFold
@@ -973,8 +973,8 @@ class SSLDataset():
             dl_u = torch.utils.data.DataLoader(
                 ds_u,
                 batch_sampler=batch_sampler_u,
-                num_workers=self.num_workers,
-                pin_memory=pin_memory
+                num_workers=4,
+                pin_memory=False
             )
             return dl_x, dl_u
         
@@ -1145,16 +1145,16 @@ class NIH_SSL_Dataset(Dataset):
             transforms.Normalize(mean, std),
         ])
         trans_strong1 = transforms.Compose([
-            #transforms.ToPILImage(),
-            transforms.ToTensor(),
+            transforms.ToPILImage(),
+            #transforms.ToTensor(),
             transforms.RandomResizedCrop(imsize, scale=(0.2, 1.), antialias=True),
             transforms.RandomHorizontalFlip(p=0.5),
             transforms.RandomApply([
-                transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)
+                transforms2.ColorJitter(0.4, 0.4, 0.4, 0.1)
             ], p=0.8),
             transforms.RandomGrayscale(p=0.2),
             #T.Normalize(mean, std),
-            #transforms.ToTensor(),
+            transforms.ToTensor(),
             transforms.Normalize(mean, std),
         ])
         if self.mode == 'train_x':

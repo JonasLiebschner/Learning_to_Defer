@@ -646,6 +646,8 @@ def one_run(dataManager, run_param, all_metrics, print_text, run_metrics, count,
     expert_metrics = {}
     verma_metrics = {}
     hemmer_metrics = {}
+    
+    metrics_added = False
 
     #Checks if there is data for this run in the save files
     if current_index is not None:
@@ -674,7 +676,7 @@ def one_run(dataManager, run_param, all_metrics, print_text, run_metrics, count,
 
         #Iterate over the folds
         #for fold_idx in range(run_param["K"]):
-        for fold_idx in range(1):
+        for fold_idx in range(3):
 
             #Check if the seed-fold combination is already in the save files
             if fold_idx in expert_metrics[seed].keys():
@@ -682,6 +684,7 @@ def one_run(dataManager, run_param, all_metrics, print_text, run_metrics, count,
             else:
                 print(f"Keys: {expert_metrics[seed].keys()}")
                 print(f"New fold: {fold_idx}")
+                metrics_added = True
 
             #Print run text if at least one computation is made for this parameter combination (run)
             if not printed:
@@ -774,10 +777,10 @@ def one_run(dataManager, run_param, all_metrics, print_text, run_metrics, count,
                 temp_count = count - 1
             else:
                 all_metrics[-1] = run_metrics
-            with open(f'{param["Parent_PATH"]}/Metrics_Folder/Metrics_{temp_count}.pickle', 'wb') as handle:
+            with open(f'{run_param["Parent_PATH"]}/Metrics_Folder/Metrics_{temp_count}.pickle', 'wb') as handle:
                 pickle.dump(all_metrics, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-    return expert_metrics, verma_metrics, hemmer_metrics
+    return expert_metrics, verma_metrics, hemmer_metrics, metrics_added
             
 
 def run_experiment(param):
@@ -923,7 +926,7 @@ def run_experiment(param):
 
                                                 start_time = time.time()
                                                 #dataManager, run_param, all_metrics, print_text, run_metrics, count, current_index=None
-                                                expert_metrics, verma_metrics, hemmer_metrics = one_run(dataManager, run_param, expert_metrics_all.copy(), print_text, metrics_save,
+                                                expert_metrics, verma_metrics, hemmer_metrics, metrics_added = one_run(dataManager, run_param, expert_metrics_all.copy(), print_text, metrics_save,
                                                                                                        count, current_index)
                                                 print("--- %s seconds ---" % (time.time() - start_time))
 
@@ -936,8 +939,9 @@ def run_experiment(param):
                                                     ensure_count = 1
                                                 else:
                                                     expert_metrics_all.append(metrics_save)
-                                                with open(f'{param["Parent_PATH"]}/Metrics_Folder/Metrics_{count - ensure_count}.pickle', 'wb') as handle:
-                                                    pickle.dump(expert_metrics_all, handle, protocol=pickle.HIGHEST_PROTOCOL)
+                                                if metrics_added:
+                                                    with open(f'{param["Parent_PATH"]}/Metrics_Folder/Metrics_{count - ensure_count}.pickle', 'wb') as handle:
+                                                        pickle.dump(expert_metrics_all, handle, protocol=pickle.HIGHEST_PROTOCOL)
                                                 if current_index is None:
                                                     count += 1
                                                 if param["NEPTUNE"]["NEPTUNE"]:
@@ -986,23 +990,27 @@ def main(args):
         "PATH": f"{path}/Datasets/NIH/",
         "Parent_PATH": path,
         "TARGET": "Airspace_Opacity",
-        "LABELER_IDS": [[4323195249, 4295232296]],
+        "LABELER_IDS": [[4323195249, 4295232296], [4295349121, 4295342357], [4295342357, 4295354117]],
         "K": 10, #Number of folds
-        #"SEEDS": [1, 2, 3, 4, 42], #Seeds for the experiments
-        "SEEDS": [1], #Seeds for the experiments
+        "SEEDS": [1, 2, 3, 4], #Seeds for the experiments
+        #"SEEDS": [1], #Seeds for the experiments
         "GT": True, # Determines if the classifier gets all data with GT Label or only the labeld data
-        "MOD": ["confidence", "disagreement", "disagreement_diff", "ssl", "normal"], #Determines the experiment modus
+        #"MOD": ["confidence", "disagreement", "disagreement_diff", "ssl", "normal"], #Determines the experiment modus
+        "MOD": ["confidence"], #Determines the experiment modus
 
         "OVERLAP": [0, 100],
+        #"OVERLAP": [0],
         "SAMPLE_EQUAL": [False, True],
+        #"SAMPLE_EQUAL": [True],
 
-        "SETTING": ["AL", "SSL", "SSL_AL", "NORMAL", "SSL_AL_SSL"],
-        #"SETTING": ["SSL_AL"],
+        #"SETTING": ["AL", "SSL", "SSL_AL", "NORMAL", "SSL_AL_SSL"],
+        "SETTING": ["SSL_AL"],
 
         "NUM_EXPERTS": 2,
         "NUM_CLASSES": 2,
 
-        "EXPERT_PREDICT": ["right", "target"],
+        #"EXPERT_PREDICT": ["right", "target"],
+        "EXPERT_PREDICT": ["target"],
 
         "AL": { #Parameter for Active Learning
             "INITIAL_SIZE": [4, 8, 16, 32], #
@@ -1010,10 +1018,11 @@ def main(args):
             "n_dataset": 2, #Number Classes
             "BATCH_SIZE": 4,
             "BATCH_SIZE_VAL": 32,
-            "ROUNDS": [2, 4, 8],
+            "ROUNDS": [2, 4],
             "LABELS_PER_ROUND": [4, 8, 16],
             "EPOCHS_DEFER": 10,
-            "COST": [(0, 0), (5, 0)], #Cost for Cost sensitiv learning
+            #"COST": [(0, 0), (5, 0)], #Cost for Cost sensitiv learning
+            "COST": [(0, 0)],
             #"TRAIN REJECTOR": False,
             "PRELOAD": True,
             "PREPROCESS": True,
@@ -1080,7 +1089,7 @@ def main(args):
 
         #Params for cluster training
         "num_worker": num_worker,
-        "cluster": False
+        "cluster": True
     }
 
     expert_metrics_all = run_experiment(param)
