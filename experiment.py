@@ -74,28 +74,14 @@ def set_seed(seed, fold=None, text=None):
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
 
-
-# In[3]:
-
-
-
-
 with open('neptune_config.json', 'r') as f:
     config = json.load(f)
 
 config_neptune = config["neptune"]
 
-
-# In[4]:
-
-
-
 def cleanTrainDir(path):
     shutil.rmtree(path)
-
-
-# In[21]:
-
+    
 
 def getExpertModelSSL_AL(dataManager, expert, labelerId, param=None, seed=None, fold=None, learning_mod="ssl", prediction_type="target"):
 
@@ -212,7 +198,7 @@ def getExpertModelSSL_AL(dataManager, expert, labelerId, param=None, seed=None, 
     
     #metrics["Test"] = met
     print("AL finished")
-    return met_test, metrics
+    return met_test, metrics, all_data_filenames[indices_labeled]
 
 
 # In[6]:
@@ -346,7 +332,7 @@ def getExpertModelsSSL_AL(dataManager, experts, param, seed, fold, learning_mod=
         met = al.testExpert(expert, test_dataset, image_container, param, learning_mod, prediction_type, seed, fold, data_name="Test")
         metrics[labelerId]["Test"]["End"] = met
         
-    return met_test, metrics
+    return met_test, metrics, all_data_filenames[indices_labeled]
 
 # In[7]:
 
@@ -365,21 +351,25 @@ def getExpertsSSL_AL(dataManager, param, fold, seed):
 
     embedded_model = ssl.create_embedded_model(dataloaders, param, param["NEPTUNE"], fold=fold, seed=seed)
 
+    indices = {}
     experts = {}
     for labelerId in param["LABELER_IDS"]:
-        nih_expert = expert_module.Expert(dataset = dataManager.getBasicDataset(), labeler_id=labelerId)
+        nih_expert = expert_module.Expert(dataset = dataManager.getBasicDataset(), labeler_id=labelerId, modus="ssl_al")
         emb_model, model = ssl.getExpertModelSSL(labelerId=labelerId, sslDataset=sslDataset, seed=seed, fold_idx=fold, n_labeled=None, embedded_model=embedded_model, param=param, neptune_param=param["NEPTUNE"])
         nih_expert.setModel(expert_module.SSLModel(emb_model, model), mod="SSL")
         experts[labelerId] = nih_expert
+        indices[labelerId] = sslDataset.getLabeledFilenames(labelerId, fold)
     metrics = {}
+    indices_labeled = {}
     if param["MOD"] == "confidence":
         for i, labelerId in enumerate(param["LABELER_IDS"]):
-            met, metrics_return = getExpertModelSSL_AL(dataManager=dataManager, expert=experts[labelerId], labelerId=labelerId, param=param, seed=seed, fold=fold, learning_mod="ssl", prediction_type=param["EXPERT_PREDICT"])
+            met, metrics_return, labeled = getExpertModelSSL_AL(dataManager=dataManager, expert=experts[labelerId], labelerId=labelerId, param=param, seed=seed, fold=fold, learning_mod="ssl", prediction_type=param["EXPERT_PREDICT"])
             metrics[labelerId] = metrics_return
+            indices_labeled[labelerId] = labeled
     elif param["MOD"] == "disagreement" or param["MOD"] == "disagreement_diff":
-        met, metrics = getExpertModelsSSL_AL(dataManager, experts, param, seed, fold, learning_mod="ssl", prediction_type=param["EXPERT_PREDICT"])
+        met, metrics, indices_labeled = getExpertModelsSSL_AL(dataManager, experts, param, seed, fold, learning_mod="ssl", prediction_type=param["EXPERT_PREDICT"])
         
-    return experts, metrics
+    return experts, metrics, {"starting labels": indices, "al labels": indices_labeled}
 
 
 # In[8]:
@@ -402,12 +392,15 @@ def getExpertsSSL(dataManager, param, fold, seed):
     torch.cuda.empty_cache()
     gc.collect()
 
+    indices = {}
+
     experts = {}
     for labelerId in param["LABELER_IDS"]:
-        nih_expert = expert_module.Expert(dataset = dataManager.getBasicDataset(), labeler_id=labelerId)
+        nih_expert = expert_module.Expert(dataset = dataManager.getBasicDataset(), labeler_id=labelerId, modus="ssl")
         emb_model, model = ssl.getExpertModelSSL(labelerId=labelerId, sslDataset=sslDataset, seed=seed, fold_idx=fold, n_labeled=None, embedded_model=None, param=param, neptune_param=param["NEPTUNE"])
         nih_expert.setModel(expert_module.SSLModel(emb_model, model), mod="SSL")
         experts[labelerId] = nih_expert
+        indices[labelerId] = sslDataset.getLabeledFilenames(labelerId, fold)
 
     nih_dataloader = dataManager.getKFoldDataloader(seed)
     expert_train, expert_val, expert_test = nih_dataloader.get_dataset_for_folder(fold)
@@ -430,7 +423,7 @@ def getExpertsSSL(dataManager, param, fold, seed):
             "End": met
         }
         
-    return experts, metrics
+    return experts, metrics, {"starting labels": indices}
 
 
 # In[9]:
@@ -479,21 +472,33 @@ def getExpertsAL(dataManager, param, fold_idx, seed):
     print("Random indices:")
     print(indices)
 
+    labeld_filenames = {}
+
+    indeces_al = {}
+
     experts = {}
     metrics = {}
     for i, labelerId in enumerate(list(param["LABELER_IDS"])):
-        nih_expert = expert_module.Expert(dataset = dataManager.getBasicDataset(), labeler_id=labelerId)
+        nih_expert = expert_module.Expert(dataset = dataManager.getBasicDataset(), labeler_id=labelerId, modus="al")
         experts[labelerId] = nih_expert
+        print("DELETE ME")
+        print("Drawn indices")
+        print(indices)
+        print(f"Len of all filenames: {len(expert_train_dataset.getAllFilenames())}")
+        print("All indices")
+        print(expert_train_dataset.getAllIndices())
+        labeld_filenames[labelerId] = np.array(expert_train_dataset.getAllFilenames())[indices[labelerId]]
         if param["MOD"] == "confidence":
-            expert_model, met_test, metric = al.getExpertModel(indices[labelerId], expert_train_dataset, expert_val_dataset, expert_test_dataset, nih_expert, param, seed, fold_idx, image_container=image_container, learning_mod="al", prediction_type=param["EXPERT_PREDICT"])
+            expert_model, met_test, metric, indices_labeled = al.getExpertModel(indices[labelerId], expert_train_dataset, expert_val_dataset, expert_test_dataset, nih_expert, param, seed, fold_idx, image_container=image_container, learning_mod="al", prediction_type=param["EXPERT_PREDICT"])
             nih_expert.setModel(expert_model, mod="AL")
             metrics[labelerId] = metric
+            indeces_al[labelerId] = indices_labeled
     if param["MOD"] == "disagreement" or param["MOD"]=="disagreement_diff":
-        expert_models, met, metrics = al.getExpertModels(indices, experts, expert_train_dataset, expert_val_dataset, expert_test_dataset, param, seed, fold_idx, mod=param["MOD"], image_container=image_container, learning_mod="al", prediction_type=param["EXPERT_PREDICT"])
+        expert_models, met, metrics, indeces_al = al.getExpertModels(indices, experts, expert_train_dataset, expert_val_dataset, expert_test_dataset, param, seed, fold_idx, mod=param["MOD"], image_container=image_container, learning_mod="al", prediction_type=param["EXPERT_PREDICT"])
         for labelerId, expert in experts.items():
             expert.setModel(expert_models[labelerId], mod="AL")
 
-    return experts, metrics
+    return experts, metrics, {"starting labels": labeld_filenames, "al labels": indeces_al}
 
 
 # In[11]:
@@ -525,18 +530,21 @@ def getExpertsNormal(dataManager, param, fold_idx, seed):
     print("Random indices:")
     print(indices)
 
+    labeled_filenames = {}
+
     experts = {}
     #Create the experts
     metrics = {}
     for i, labelerId in enumerate(list(param["LABELER_IDS"])):
-        nih_expert = expert_module.Expert(dataset = dataManager.getBasicDataset(), labeler_id=labelerId)
+        nih_expert = expert_module.Expert(dataset = dataManager.getBasicDataset(), labeler_id=labelerId, modus="normal")
         experts[labelerId] = nih_expert
+        labeld_filenames[labelerId] = np.array(expert_train_dataset.getAllFilenames())[indices[labelerId]]
 
         model, met, metric = al.getExpertModelNormal(indices[labelerId], expert_train_dataset, expert_val_dataset, expert_test_dataset, nih_expert, param, seed, fold_idx, image_container=image_container, learning_mod="al", prediction_type=param["EXPERT_PREDICT"])
         nih_expert.setModel(model, mod="AL")
         metrics[labelerId] = metric
 
-    return experts, metrics
+    return experts, metrics, {"starting labels": labeled_filenames}
 
 
 # In[12]:
@@ -546,7 +554,7 @@ def getExpertsPerfect(dataManager, param, fold, seed):
 
     experts = {}
     for i, labelerId in enumerate(list(param["LABELER_IDS"])):
-        nih_expert = expert_module.Expert(dataset = dataManager.getBasicDataset(), labeler_id=labelerId)
+        nih_expert = expert_module.Expert(dataset = dataManager.getBasicDataset(), labeler_id=labelerId, modus="perfect")
         experts[labelerId] = nih_expert
 
 
@@ -591,15 +599,15 @@ def getExperts(dataManager, param, seed, fold):
     if param["SETTING"] == "PERFECT":
         experts, metrics = getExpertsPerfect(dataManager, param, fold, seed)
     if param["SETTING"] == "AL":
-        experts, metrics = getExpertsAL(dataManager, param, fold, seed)
+        experts, metrics, labeled_filenames = getExpertsAL(dataManager, param, fold, seed)
     elif param["SETTING"] == "SSL":
-        experts, metrics = getExpertsSSL(dataManager, param, fold, seed)
+        experts, metrics, labeled_filenames = getExpertsSSL(dataManager, param, fold, seed)
     elif param["SETTING"] == "SSL_AL" or param["SETTING"] == "SSL_AL_SSL":
-        experts, metrics = getExpertsSSL_AL(dataManager, param, fold, seed)
+        experts, metrics, labeled_filenames = getExpertsSSL_AL(dataManager, param, fold, seed)
     elif param["SETTING"] == "NORMAL":
-        experts, metrics = getExpertsNormal(dataManager, param, fold, seed)
+        experts, metrics, labeled_filenames = getExpertsNormal(dataManager, param, fold, seed)
 
-    return experts, metrics
+    return experts, metrics, labeled_filenames
 
 
 # In[14]:
@@ -619,7 +627,9 @@ def L2D_Verma(train_loader, val_loader, test_loader, full_dataloader, expert_fns
     return metrics_train_all, metrics_val_all, metrics_test, metrics_full, metrics_pretrain_all
 
 
-# In[15]:
+
+def create_gt_label(experts, dataloader, method="simple"):
+    return None
 
 
 def one_run(dataManager, run_param, all_metrics, print_text, run_metrics, count, current_index=None):
@@ -674,7 +684,7 @@ def one_run(dataManager, run_param, all_metrics, print_text, run_metrics, count,
 
         #Iterate over the folds
         #for fold_idx in range(run_param["K"]):
-        for fold_idx in range(1):
+        for fold_idx in range(2):
 
             #Check if the seed-fold combination is already in the save files
             if fold_idx in expert_metrics[seed].keys():
@@ -713,7 +723,7 @@ def one_run(dataManager, run_param, all_metrics, print_text, run_metrics, count,
             torch.cuda.empty_cache()
             gc.collect()
 
-            experts, expert_metric = getExperts(dataManager, run_param, seed, fold_idx)
+            experts, expert_metric, labeled_filenames = getExperts(dataManager, run_param, seed, fold_idx)
             expert_metrics[seed][fold_idx] = expert_metric
 
             torch.cuda.empty_cache()
@@ -744,6 +754,14 @@ def one_run(dataManager, run_param, all_metrics, print_text, run_metrics, count,
                 elif run_param["SETTING"] == "PERFECT":
                     expert_fns.append(expert.predict)
 
+            #print("DELETE ME")
+            #return experts, dataManager, labeled_filenames
+
+            #Block to create df of artificial labels, real predictions and which images were labeled
+            fullDataset = nih_dataloader.getFullDataloader().dataset
+            labeled_df = save_expert_labels(fullDataset, experts, labeled_filenames)
+            
+
             metrics_train_all, metrics_val_all, metrics_test_all, metrics_full_all, metrics_pretrain_all = L2D_Verma(train_loader, val_loader, test_loader, full_dataloader, expert_fns, run_param, seed, fold_idx, experts=experts)
 
             verma_metrics[seed][fold_idx] = {
@@ -763,6 +781,8 @@ def one_run(dataManager, run_param, all_metrics, print_text, run_metrics, count,
                 "full": all_full_metrics,
             }
 
+            run_metrics["artificial expert predictions"] = labeled_df
+
             run_metrics["expert metrics"] = expert_metrics
             run_metrics["verma"] = verma_metrics
             run_metrics["hemmer"] = hemmer_metrics
@@ -774,10 +794,10 @@ def one_run(dataManager, run_param, all_metrics, print_text, run_metrics, count,
                 temp_count = count - 1
             else:
                 all_metrics[-1] = run_metrics
-            with open(f'{param["Parent_PATH"]}/Metrics_Folder/Metrics_{temp_count}.pickle', 'wb') as handle:
+            with open(f'{run_param["Parent_PATH"]}/Metrics_Folder/Metrics_{temp_count}.pickle', 'wb') as handle:
                 pickle.dump(all_metrics, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-    return expert_metrics, verma_metrics, hemmer_metrics
+    return expert_metrics, verma_metrics, hemmer_metrics, labeled_df
             
 
 def run_experiment(param):
@@ -923,10 +943,15 @@ def run_experiment(param):
 
                                                 start_time = time.time()
                                                 #dataManager, run_param, all_metrics, print_text, run_metrics, count, current_index=None
-                                                expert_metrics, verma_metrics, hemmer_metrics = one_run(dataManager, run_param, expert_metrics_all.copy(), print_text, metrics_save,
+                                                expert_metrics, verma_metrics, hemmer_metrics, labeled_df = one_run(dataManager, run_param, expert_metrics_all.copy(), print_text, metrics_save,
                                                                                                        count, current_index)
+
+                                                #print("DELETE ME")
+                                                #return one_run(dataManager, run_param, expert_metrics_all.copy(), print_text, metrics_save, count, current_index)
+                                                
                                                 print("--- %s seconds ---" % (time.time() - start_time))
 
+                                                metrics_save["artificial expert predictions"] = labeled_df
                                                 metrics_save["expert metrics"] = expert_metrics
                                                 metrics_save["verma"] = verma_metrics
                                                 metrics_save["hemmer"] = hemmer_metrics
@@ -944,7 +969,6 @@ def run_experiment(param):
                                                     run["metrics"] = metrics_save
 
                                                     run.stop()
-                                                #return
 
     return expert_metrics_all
 
@@ -966,6 +990,88 @@ def convert_list_to_string(li):
     return 
 
 
+def save_expert_labels(fullDataset, experts, labeled_filenames):
+    true_labels = build_experts_prediction_df(fullDataset, experts)
+    artificial_labels = get_labeled_images_df(labeled_filenames)
+
+    label_df = pd.merge(true_labels, artificial_labels, how="outer")
+    return label_df
+
+#Functions to create the predictions
+
+def build_experts_prediction_df(fullDataset, experts):
+    """
+    Creates a df which contains the filename, gt, [true_prediction, artificial_prediction for every expert]
+    """
+    label_df = create_label_df(fullDataset, experts)
+    label_df.columns = [process_name_expert_artificial_labels(column) if "prediction" in column else column for column in list(label_df.columns)]
+
+    true_experts = create_true_expert_labels(fullDataset, experts)
+
+    return pd.merge(true_experts, label_df)
+
+def create_true_expert_labels(dataset, experts):
+    """
+    Creates a df with filename, gt, [true expert predictions]
+    """
+    gt = pd.DataFrame({"filename": dataset.getAllFilenames(), "gt": dataset.getAllTargets()})
+    result = gt.copy()
+    for expert_id, expert in experts.items():
+        expert_df = expert.predictions.reset_index(names="filename")
+        expert_df.columns = [column + "_true_prediction" if "filename" not in column else column for column in list(expert_df.columns)]
+        result = pd.merge(result, expert_df)
+    return result
+
+def create_label_df(dataset, experts):
+    """
+    Creates a df with filename, gt, [artificial expert predictions]
+    """
+    gt = pd.DataFrame({"filename": dataset.getAllFilenames(), "gt": dataset.getAllTargets()})
+    result = gt.copy()
+    for expert_id, expert in experts.items():
+        if "ssl" in expert.modus:
+            expert_df = pd.DataFrame({"filename": expert.prebuild_filenames_ssl, f"prediction_{expert_id}": expert.prebuild_predictions_ssl})
+        else:
+            expert_df = pd.DataFrame({"filename": expert.prebuild_filenames_al, f"prediction_{expert_id}": expert.prebuild_predictions_al})
+        result = pd.merge(result, expert_df)
+    return result
+
+#Functions to create the artificial
+def swap_prediction_id(name):
+    result = ""
+    for element in name.split("_")[::-1]:
+        result += element + "_"
+    return result[:-1]
+print(swap_prediction_id("prediction_4295349121"))
+
+def process_name_expert_artificial_labels(name):
+    result = ""
+    for element in swap_prediction_id(name).split("_"):
+        if "prediction" in element:
+            result += "artificial_"
+        result += element + "_"
+    return result[:-1]
+
+def get_labeled_images_df(labeled_filenames):
+    """
+    Creates a df which contains the filename, [if initial labeled, if labeled after al for ever expert]
+    """
+    dfs = []
+    for labelerId, filelist in labeled_filenames["starting labels"].items():
+        dfs.append(pd.DataFrame({"filename": filelist, f"{labelerId}_starting_label": [1 for i in range(len(filelist))]}))
+    starting_labels = dfs[0]
+    for i in range(1, len(dfs)):
+        starting_labels = pd.merge(starting_labels, dfs[i], how="outer")
+
+    dfs = []
+    for labelerId, filelist in labeled_filenames["al labels"].items():
+        dfs.append(pd.DataFrame({"filename": filelist, f"{labelerId}_al_label": [1 for i in range(len(filelist))]}))
+    al_labels = dfs[0]
+    for i in range(1, len(dfs)):
+        al_labels = pd.merge(al_labels, dfs[i], how="outer")
+
+    return pd.merge(starting_labels, al_labels, how="outer")
+
 #CUDA_LAUNCH_BLOCKING=1
 #torch.backends.cudnn.benchmark = True
 
@@ -986,7 +1092,8 @@ def main(args):
         "PATH": f"{path}/Datasets/NIH/",
         "Parent_PATH": path,
         "TARGET": "Airspace_Opacity",
-        "LABELER_IDS": [[4323195249, 4295232296]],
+        #"LABELER_IDS": [[4323195249, 4295232296]],
+        "LABELER_IDS": [[4295349121, 4295342357]],
         "K": 10, #Number of folds
         #"SEEDS": [1, 2, 3, 4, 42], #Seeds for the experiments
         "SEEDS": [1], #Seeds for the experiments
@@ -996,8 +1103,8 @@ def main(args):
         "OVERLAP": [0, 100],
         "SAMPLE_EQUAL": [False, True],
 
-        "SETTING": ["AL", "SSL", "SSL_AL", "NORMAL", "SSL_AL_SSL"],
-        #"SETTING": ["SSL_AL"],
+        #"SETTING": ["AL", "SSL", "SSL_AL", "NORMAL", "SSL_AL_SSL"],
+        "SETTING": ["SSL_AL"],
 
         "NUM_EXPERTS": 2,
         "NUM_CLASSES": 2,
