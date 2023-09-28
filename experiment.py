@@ -672,7 +672,8 @@ def one_run(dataManager, run_param, all_metrics, print_text, run_metrics, count,
         verma_metrics = current_metric["verma"]
         hemmer_metrics = current_metric["hemmer"]
         
-        labeled_dfs = current_metric["artificial expert predictions"]
+        if "artificial expert predictions" in current_metric.keys():
+            labeled_dfs = current_metric["artificial expert predictions"]
     #If not, create new element in list of all metrics
     else:
         all_metrics.append(run_metrics)
