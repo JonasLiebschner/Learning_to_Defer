@@ -657,6 +657,8 @@ def one_run(dataManager, run_param, all_metrics, print_text, run_metrics, count,
     verma_metrics = {}
     hemmer_metrics = {}
     
+    labeled_dfs = {}
+    
     metrics_added = False
 
     #Checks if there is data for this run in the save files
@@ -669,6 +671,8 @@ def one_run(dataManager, run_param, all_metrics, print_text, run_metrics, count,
         expert_metrics = current_metric["expert metrics"]
         verma_metrics = current_metric["verma"]
         hemmer_metrics = current_metric["hemmer"]
+        
+        labeled_dfs = current_metric["artificial expert predictions"]
     #If not, create new element in list of all metrics
     else:
         all_metrics.append(run_metrics)
@@ -683,6 +687,7 @@ def one_run(dataManager, run_param, all_metrics, print_text, run_metrics, count,
             expert_metrics[seed] = {}
             verma_metrics[seed] = {}
             hemmer_metrics[seed] = {}
+            labeled_dfs[seed] = {}
 
         #Iterate over the folds
         #for fold_idx in range(run_param["K"]):
@@ -764,6 +769,8 @@ def one_run(dataManager, run_param, all_metrics, print_text, run_metrics, count,
             fullDataset = nih_dataloader.getFullDataloader().dataset
             labeled_df = save_expert_labels(fullDataset, experts, labeled_filenames)
             
+            labeled_dfs[seed][fold_idx] = labeled_df
+            
 
             metrics_train_all, metrics_val_all, metrics_test_all, metrics_full_all, metrics_pretrain_all = L2D_Verma(train_loader, val_loader, test_loader, full_dataloader, expert_fns, run_param, seed, fold_idx, experts=experts)
 
@@ -801,7 +808,7 @@ def one_run(dataManager, run_param, all_metrics, print_text, run_metrics, count,
                 pickle.dump(all_metrics, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
-    return expert_metrics, verma_metrics, hemmer_metrics, metrics_added, labeled_df
+    return expert_metrics, verma_metrics, hemmer_metrics, metrics_added, labeled_dfs
 
             
 
@@ -948,14 +955,14 @@ def run_experiment(param):
 
                                                 start_time = time.time()
                                                 #dataManager, run_param, all_metrics, print_text, run_metrics, count, current_index=None
-                                                expert_metrics, verma_metrics, hemmer_metrics, metrics_added, labeled_df = one_run(dataManager, run_param, expert_metrics_all.copy(), print_text, metrics_save, count, current_index)
+                                                expert_metrics, verma_metrics, hemmer_metrics, metrics_added, labeled_dfs = one_run(dataManager, run_param, expert_metrics_all.copy(), print_text, metrics_save, count, current_index)
 
                                                 #print("DELETE ME")
                                                 #return one_run(dataManager, run_param, expert_metrics_all.copy(), print_text, metrics_save, count, current_index)
                                                 
                                                 print("--- %s seconds ---" % (time.time() - start_time))
 
-                                                metrics_save["artificial expert predictions"] = labeled_df
+                                                metrics_save["artificial expert predictions"] = labeled_dfs
                                                 metrics_save["expert metrics"] = expert_metrics
                                                 metrics_save["verma"] = verma_metrics
                                                 metrics_save["hemmer"] = hemmer_metrics
