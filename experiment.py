@@ -832,11 +832,15 @@ def run_experiment(param):
         with open(latest_file, 'rb') as handle:
             expert_metrics_all = pickle.load(handle)
 
-        runs = [{i:run[i] for i in run if i not in ["expert metrics", "verma", "hemmer"]} for run in expert_metrics_all]
+        runs = [{i:run[i] for i in run if i not in ["expert metrics", "verma", "hemmer", "artificial expert predictions"]} for run in expert_metrics_all]
+        
+        print(f"Len of runs: {len(run)}")
 
         if "pickle" in latest_file:
 
             count = int(latest_file.split("/")[-1][8:-7]) + 1
+            
+            print(f"Current count: {count}")
 
     #Every pair of labeler ids
     for labeler_ids in param["LABELER_IDS"]:
