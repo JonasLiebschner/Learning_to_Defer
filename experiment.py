@@ -538,7 +538,7 @@ def getExpertsNormal(dataManager, param, fold_idx, seed):
     for i, labelerId in enumerate(list(param["LABELER_IDS"])):
         nih_expert = expert_module.Expert(dataset = dataManager.getBasicDataset(), labeler_id=labelerId, modus="normal")
         experts[labelerId] = nih_expert
-        labeld_filenames[labelerId] = np.array(expert_train_dataset.getAllFilenames())[indices[labelerId]]
+        labeled_filenames[labelerId] = np.array(expert_train_dataset.getAllFilenames())[indices[labelerId]]
 
         model, met, metric = al.getExpertModelNormal(indices[labelerId], expert_train_dataset, expert_val_dataset, expert_test_dataset, nih_expert, param, seed, fold_idx, image_container=image_container, learning_mod="al", prediction_type=param["EXPERT_PREDICT"])
         nih_expert.setModel(model, mod="AL")
@@ -834,7 +834,7 @@ def run_experiment(param):
 
         runs = [{i:run[i] for i in run if i not in ["expert metrics", "verma", "hemmer", "artificial expert predictions"]} for run in expert_metrics_all]
         
-        print(f"Len of runs: {len(run)}")
+        print(f"Len of runs: {len(runs)}")
 
         if "pickle" in latest_file:
 
