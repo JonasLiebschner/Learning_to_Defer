@@ -674,6 +674,9 @@ def one_run(dataManager, run_param, all_metrics, print_text, run_metrics, count,
         
         if "artificial expert predictions" in current_metric.keys():
             labeled_dfs = current_metric["artificial expert predictions"]
+            print(type(labeled_dfs))
+        else:
+            print(current_metric.keys())
     #If not, create new element in list of all metrics
     else:
         all_metrics.append(run_metrics)
@@ -769,6 +772,11 @@ def one_run(dataManager, run_param, all_metrics, print_text, run_metrics, count,
             #Block to create df of artificial labels, real predictions and which images were labeled
             fullDataset = nih_dataloader.getFullDataloader().dataset
             labeled_df = save_expert_labels(fullDataset, experts, labeled_filenames)
+
+            print("DELETE ME")
+            print(labeled_df)
+            print("DELETE ME")
+            print(labeled_dfs)
             
             labeled_dfs[seed][fold_idx] = labeled_df
             
@@ -792,7 +800,7 @@ def one_run(dataManager, run_param, all_metrics, print_text, run_metrics, count,
                 "full": all_full_metrics,
             }
 
-            run_metrics["artificial expert predictions"] = labeled_df
+            run_metrics["artificial expert predictions"] = labeled_dfs
 
             run_metrics["expert metrics"] = expert_metrics
             run_metrics["verma"] = verma_metrics
