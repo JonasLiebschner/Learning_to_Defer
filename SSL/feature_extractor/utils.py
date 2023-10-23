@@ -67,9 +67,9 @@ def get_train_dir(wkdir, args, mode, param, seed, fold):
     :param args: Args
     """
     if param["cluster"]:
-        path = f'{wkdir}/{args["dataset"].upper()}/Embedded/Seed_{seed}_Fold_{fold}/{concat_args(args, mode)}/'
+        path = f'{wkdir}/{param["DATASET"].upper()}/Embedded/Seed_{seed}_Fold_{fold}/{concat_args(args, mode)}/'
     else:
-        path = f'{wkdir}/{args["dataset"].upper()}/Embedded/{concat_args(args, mode)}/'
+        path = f'{wkdir}/{param["DATASET"].upper()}/Embedded/{concat_args(args, mode)}/'
     try:
         os.mkdir(path)
     except:

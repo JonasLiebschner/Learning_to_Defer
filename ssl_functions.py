@@ -41,7 +41,7 @@ def create_embedded_model(dataloaders, param, neptune_param, fold, seed):
     neptune_param = neptune_param
 
     #wkdir = os.getcwd() + "/SSL_Working"
-    wkdir = param["Parent_PATH"] + "/SSL_Working"
+    wkdir = param["Parent_PATH"] + "/SSL_Working/" + run_param["DATASET"]
     
     sys.path.append(wkdir)
 
@@ -484,7 +484,7 @@ def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded
     path = param["PATH"]
 
     #Setzt Logger fest
-    out_path = f"{param['Parent_PATH']}/SSL_Working/SSL/"
+    out_path = f"{param['Parent_PATH']}/SSL_Working/{param['DATASET']}/SSL/"
         
     logger, output_dir = setup_default_logging(out_path, args)
     logger.info(dict(args))
