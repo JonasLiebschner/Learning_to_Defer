@@ -105,7 +105,7 @@ class Dataset(ABC):
         pass
 
     @abstractmethod
-    def __getitem__(self, index: int) -> Tuple[Any, Any]:
+    def __getitem__(self, index: int):
         pass
 
     @abstractmethod
@@ -179,4 +179,140 @@ class DataManager(ABC):
     @abstractmethod
     def getBasicDataset(self):
         pass
+
+
+class SSLDataset(ABC):
+   
+    def set_seed(self, seed, fold=None, text=None):
+        if fold is not None and text is not None:
+            s = text + f" + {seed} + {fold}"
+            seed = int(hashlib.sha256(s.encode('utf-8')).hexdigest(), 16) % 10**8
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed(seed)
+            torch.cuda.manual_seed_all(seed)
+
+
+    @abstractmethod
+    def sampleIndices(self, n, k, data, experten, seed = None, sample_equal=False, fold=None):
+        pass
+
+    @abstractmethod
+    def createLabeledIndices(self, labelerIds, n_L, k, seed=0, sample_equal=False):
+        """
+        Creates the labeled indices for all folds for every expert
+        
+        n_L - number of labeled images
+        k - number of shared labeled images
+        seed - random seed to init the random function
+        """
+        pass
+
+    @abstractmethod
+    def getLabeledIndices(self, labelerId, fold_idx):
+        pass
+
+    @abstractmethod
+    def addNewLabels(self, filenames, fold_idx, labelerId):
+        """
+        Add new indeces for labeled images for ssl in combination with active learning
+
+        filenames contains the names of the new labeled images
+        fold_idx is the current fold to spezify where the indices should be set
+        """
+        pass
+
+    @abstractmethod
+    def getDatasetsForExpert(self, labelerId, fold_idx):
+        pass
+
+    @abstractmethod
+    def getTrainDataset(self, labelerId, fold_idx):
+        pass
+
+    @abstractmethod
+    def getValDataset(self, labelerId, fold_idx):
+        pass
+
+    @abstractmethod
+    def getTestDataset(self, labelerId, fold_idx):
+        pass
+        
+    @abstractmethod
+    def get_train_loader_interface(self, expert, batch_size, mu, n_iters_per_epoch, L, method='comatch', imsize=(128, 128), fold_idx=0, pin_memory=False):
+        pass
+
+    @abstractmethod
+    def get_val_loader_interface(self, expert, batch_size, num_workers, pin_memory=True, imsize=(128, 128), fold_idx=0):
+        pass
+
+    @abstractmethod
+    def get_test_loader_interface(self, expert, batch_size, num_workers, pin_memory=True, imsize=(128, 128), fold_idx=0):
+        pass
+
+    @abstractmethod
+    def getLabeledFilenames(self, labelerId, fold_idx):
+        pass
+        
+    """
+    Functions to get the whole dataset as dataloaders
+    """
+    @abstractmethod
+    def get_data_loader_for_fold(self, fold_idx):
+        pass
+
+    @abstractmethod
+    def get_dataset_for_folder(self, fold_idx):
+        pass
+
+    @abstractmethod
+    def create_Dataloader_for_Fold(self, idx):
+        pass
+
+    @abstractmethod
+    def buildDataloaders(self):
+        pass
+
+    @abstractmethod
+    def getFullDataloader(self):
+        pass
+
+    @abstractmethod
+    def get_ImageContainer(self):
+        pass
+
+    @abstractmethod
+    def getData(self):
+        pass
+
 ###Bis hier hin bearbeitet
+
+class SSL_Dataset(ABC):
+    """Class representing the NIH dataset
+
+    :param data: Images
+    :param labels: Labels
+    :param mode: Mode
+    :param imsize: Image size
+
+    :ivar data: Images
+    :ivar labels: Labels
+    :ivar mode: Mode
+    """
+    
+    @abstractmethod
+    def loadImages(self):
+        """
+        Load all images
+        """
+        pass
+
+    @abstractmethod
+    def __getitem__(self, index: int):
+        pass
+
+    @abstractmethod
+    def __len__(self) -> int:
+        pass
