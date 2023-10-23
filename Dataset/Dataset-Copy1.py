@@ -31,7 +31,7 @@ from SSL.datasets.sampler import RandomSampler, BatchSampler
 import warnings
 
 
-class BasicDataset:
+class BasicDatasetNIH(BasicDataset):
     """
     Contains the main Dataset with GT Label and Expert Label for every Image, sorted by file name
     """
@@ -67,7 +67,7 @@ class BasicDataset:
             temp[str(labelerId)] = self.data[str(labelerId)]
         return temp
 
-class NIHDataset:
+class NIHDataset(Dataset):
     """
     """
     def __init__(self, data: pd.DataFrame, transformation=None, preload=False, preprocess=False, param=None, image_container=None, size=(128, 128)):
@@ -228,9 +228,9 @@ class NIHDataset:
     def getAllIndices(self):
         return self.data.index
 
-class NIH_K_Fold_Dataloader:
+class NIH_K_Fold_Dataloader(K_Fold_Dataloader):
     def __init__(self, dataset, k=10, labelerIds=[4323195249 , 4295194124], train_batch_size=8, test_batch_size=8,
-                 seed=42, fraction=1.0, maxLabels=800, preload=False, preprocess=False, prebuild=False, param=None):
+                 seed=42, fraction=1.0, preload=False, preprocess=False, prebuild=False, param=None):
         self.dataset = dataset.getData()
         print("Full length: " + str(len(self.dataset)))
         self.k = k
@@ -279,12 +279,12 @@ class NIH_K_Fold_Dataloader:
         self.patient_performance["target"] = target_temp 
 
         self.expert_labels = self.data
-        self._init_k_folds(maxLabels=maxLabels)
+        self._init_k_folds()
 
         if self.prebuild:
             self.buildDataloaders()
 
-    def _init_k_folds(self, fraction=1.0, maxLabels=800):
+    def _init_k_folds(self, fraction=1.0):
         self.labels = self.expert_labels.drop_duplicates(subset=["Image ID"])
         self.labels = self.labels.fillna(0)
         self.labels = self.labels[["Patient ID", "Image ID", "GT"]]
@@ -331,7 +331,7 @@ class NIH_K_Fold_Dataloader:
 
             #expert_train = self.labels[self.labels["Patient ID"].isin(train_patient_ids)]
             expert_train = self.labels[self.labels["Patient ID"].isin(train_patient_ids)]
-            expert_train = self.labels[self.labels["Patient ID"].isin(train_patient_ids)].sample(n=min(maxLabels,len(expert_train)))
+            #expert_train = self.labels[self.labels["Patient ID"].isin(train_patient_ids)].sample(n=min(maxLabels,len(expert_train)))
             expert_val = self.labels[self.labels["Patient ID"].isin(val_patient_ids)]
             expert_test = self.labels[self.labels["Patient ID"].isin(test_patient_ids)]
 
@@ -395,8 +395,7 @@ class NIH_K_Fold_Dataloader:
         return self.labels[self.labels["Patient ID"].isin(self.patient_performance["Patient ID"])]
 
 
-
-class ImageContainer:
+class ImageContainerNIH(ImageContainer):
     def __init__(self, path, img_ids, preload=True, transform=None, preprocess=False, img_size=(128, 128)):
         self.PATH = path
         self.image_ids = img_ids.values
@@ -551,7 +550,7 @@ def downloadLabels(Path):
     urllib.request.urlretrieve(links[2], Path + "validation_labels.csv")
     
     
-class DataManager():
+class DataManagerNIH(DataManager):
     """
     Class to contain and manage all data for all experiments
     
@@ -604,7 +603,7 @@ class DataManager():
                     param = self.param
                 )
             
-            self.SSLDatasets[seed] = self.SSLDataset = SSLDataset(dataset=self.basicDataset, kFoldDataloader=self.kFoldDataloaders[seed], imageContainer=self.fullImageContainer, 
+            self.SSLDatasets[seed] = SSLDataset(dataset=self.basicDataset, kFoldDataloader=self.kFoldDataloaders[seed], imageContainer=self.fullImageContainer, 
                                                                   labeler_ids=self.labeler_ids, param=self.param, seed=seed, prebuild = self.param["SSL"]["PREBUILD"])
         
          
@@ -673,23 +672,13 @@ class SSLDataset():
         self.used_data = self.data[self.data["Image ID"].isin(self.used_image_ids["Image ID"])]
         
         kf = KFold(n_splits=self.k, shuffle=True, random_state=self.seed)
-       
-        #TODO: Is Patient ID better than Image ID, are splitted patients a problem?
         
         split_target = "Image ID"
-        #split_target = "Patient ID"
-        
-        self.unused_data.head(10)
-        
+                
         split = kf.split(self.unused_data["Image ID"], self.unused_data["GT"])
         
         fold_data_idxs = [fold_test_idxs for (_, fold_test_idxs) in split]
         
-        #fold_data_idxs = [fold_test_idxs for (_, fold_test_idxs) in kf_cv.split(self.patient_performance["Patient ID"].values, self.patient_performance["target"].values)]
-
-            
-        #for j, (train_index, test_index) in enumerate(kf.split(self.unused_data["Image ID"], self.unused_data["GT"])):
-        #for j, (train_index, test_index) in enumerate(split):
         for fold_idx in range(len(fold_data_idxs)):
             
             #fold_idx = j
@@ -973,8 +962,9 @@ class SSLDataset():
             dl_u = torch.utils.data.DataLoader(
                 ds_u,
                 batch_sampler=batch_sampler_u,
-                num_workers=4,
-                pin_memory=False
+                #num_workers=self.num_workers,
+                num_workers=0,
+                pin_memory=pin_memory
             )
             return dl_x, dl_u
         
