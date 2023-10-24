@@ -389,7 +389,7 @@ def train_one_epoch(epoch,
     return loss_x_meter.avg, loss_u_meter.avg, loss_contrast_meter.avg, mask_meter.avg, pos_meter.avg, n_correct_u_lbs_meter.avg/n_strong_aug_meter.avg, queue_feats, queue_probs, queue_ptr, prob_list
 
 
-def evaluate(model, ema_model, emb_model, dataloader):
+def evaluate(model, ema_model, emb_model, dataloader, param):
     """Evaluate model on train or validation set
 
     :param model: Model
@@ -408,9 +408,14 @@ def evaluate(model, ema_model, emb_model, dataloader):
     ema_top1_meter = AverageMeter()
 
     with torch.no_grad():
-        for ims, lbs, im_id in dataloader:
+        for ims, lbs, im_id, gt in dataloader:
             ims = ims.cuda()
             lbs = lbs.cuda()
+            gt.cuda()
+
+            if param["EXPERT_PREDICT"] == "right":
+                correct_predictions = torch.eq(lbs, gt).type(torch.LongTensor)
+                lbs = correct_predictions
 
             embedding = emb_model.get_embedding(batch=ims)
             logits, _ = model(embedding)
@@ -593,7 +598,7 @@ def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded
         loss_x, loss_u, loss_c, mask_mean, num_pos, guess_label_acc, queue_feats, queue_probs, queue_ptr, prob_list = \
         train_one_epoch(epoch, **train_args, queue_feats=queue_feats,queue_probs=queue_probs,queue_ptr=queue_ptr)
 
-        top1, ema_top1 = evaluate(model, ema_model, emb_model, dlval)
+        top1, ema_top1 = evaluate(model, ema_model, emb_model, dlval, param)
 
 
         tb_logger.add_scalar('loss_x', loss_x, epoch)
@@ -628,7 +633,7 @@ def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded
             'epoch': epoch,
         }
         torch.save(save_obj, os.path.join(output_dir, 'ckp.latest'))
-    _, _ = evaluate(model, ema_model, emb_model, dlval)
-    _, _ = evaluate(model, ema_model, emb_model, dtest)
+    _, _ = evaluate(model, ema_model, emb_model, dlval, param)
+    _, _ = evaluate(model, ema_model, emb_model, dtest, param)
 
     return emb_model, model
