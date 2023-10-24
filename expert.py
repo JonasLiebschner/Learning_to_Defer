@@ -23,6 +23,8 @@ class Expert:
         self.labelerId = labeler_id
         self.dataset = dataset
         self.data = dataset.getData()[["Image ID", str(self.labelerId)]]
+        self.gt = dataset.getData()[["Image ID", "GT"]]
+        self.gt_values = self.gt["GT"].unique()
         #self.data["Image ID"] = self.data["Image ID"].astype('category')
         self.nLabels = nLabels
         self.param = param
@@ -100,17 +102,43 @@ class Expert:
         elif mod == "AL":
             self.alModel = model
 
-    def init_model_predictions(self, train_dataloader, mod):
+    def init_model_predictions(self, train_dataloader, mod, prediction_type):
         if mod == "SSL":
             for i, (input, target, hpred) in enumerate(train_dataloader):
                 result = self.predictSLL(input.to(self.device), target, hpred).tolist()
-                self.prebuild_predictions_ssl += result
+                if prediction_type == "target":
+                    self.prebuild_predictions_ssl += result
+                elif prediction_type == "right":
+                    target_prediction = []
+                    for i in range(len(result)):
+                        gt = self.gt[self.gt["Image ID"] == hpred[i]]
+                        if result[i] == 1:
+                            target_prediction = gt
+                        else:
+                            sample_list = self.gt_values.copy()
+                            sample_list.remove(gt)
+                            target_prediction = random.sample(sample_list, k=1)
+                    self.prebuild_predictions_ssl += target_prediction
+                
                 self.prebuild_filenames_ssl += hpred
             print("Len prebuild predictions: " + str(len(self.prebuild_predictions_ssl)))
         elif mod == "AL":
             for i, (input, target, hpred) in enumerate(train_dataloader):
                 result = self.predictAL(input.to(self.device), target, hpred)
-                self.prebuild_predictions_al += result
+                if prediction_type == "target":
+                    self.prebuild_predictions_al += result
+                elif prediction_type == "right":
+                    target_prediction = []
+                    for i in range(len(result)):
+                        gt = self.gt[self.gt["Image ID"] == hpred[i]]
+                        if result[i] == 1:
+                            target_prediction = gt
+                        else:
+                            sample_list = self.gt_values.copy()
+                            sample_list.remove(gt)
+                            target_prediction = random.sample(sample_list, k=1)
+                    self.prebuild_predictions_al += target_prediction
+                    
                 self.prebuild_filenames_al += hpred
     
     def predict_model_predefined(self, img, target, filenames, mod):
@@ -149,13 +177,16 @@ class Expert:
     Old functions, here for compatibility and wraped from the new functions
     """
         
-    def predictWithModel(self, img, target, filename):
+    def predictWithModel(self, img, target, filename, prediction_type):
         """
         Checks with the model if the expert would be correct
         If it predicts 1 than it returns the true label
         If it predicts 0 than is returns the opposit label
         """
         predicted = self.get_model_prediction(self.alModel, img, target, filename)
+        #if prediction_type == "target":
+        #    return redicted
+        #elif prediction_type == "right"
         result = []
         target = target.cpu().detach().numpy()
         for i, pred in enumerate(predicted):
@@ -163,7 +194,8 @@ class Expert:
                 result.append(target[i])
             else:
                 result.append(1 - target[i])
-        return result
+        #return result
+        return predicted
 
 class SSLModel():
     def __init__(self, embedded_model, linear_model):

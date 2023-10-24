@@ -897,7 +897,7 @@ class SSLDataset(SSLDataset):
     
     def getTrainDataset(self, labelerId, fold_idx):
         train_data, _, _ = self.getDatasetsForExpert(labelerId, fold_idx)
-        gt_train, _, _ = self.k_fold_datasets[fold_idx][["Image ID", "GT"]]
+        gt_train, _, _ = self.k_fold_datasets[fold_idx]
         
         X = np.array(train_data["Image ID"])
         y = np.array(train_data[str(labelerId)])
@@ -918,7 +918,7 @@ class SSLDataset(SSLDataset):
     
     def getValDataset(self, labelerId, fold_idx):
         _, val_data, _ = self.getDatasetsForExpert(labelerId, fold_idx)
-        _, val_gt, _ = self.k_fold_datasets[fold_idx][["Image ID", "GT"]]
+        _, val_gt, _ = self.k_fold_datasets[fold_idx]
         X = np.array(val_data["Image ID"])
         y = np.array(val_data[str(labelerId)])
         gt = np.array(val_gt["GT"])
@@ -927,7 +927,7 @@ class SSLDataset(SSLDataset):
     
     def getTestDataset(self, labelerId, fold_idx):
         _, _, test_data = self.getDatasetsForExpert(labelerId, fold_idx)
-        _, _, test_gt = self.k_fold_datasets[fold_idx][["Image ID", "GT"]]
+        _, _, test_gt = self.k_fold_datasets[fold_idx]
         X = np.array(test_data["Image ID"])
         y = np.array(test_data[str(labelerId)])
         gt = np.array(test_gt["GT"])

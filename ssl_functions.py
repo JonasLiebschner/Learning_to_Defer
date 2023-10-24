@@ -41,7 +41,7 @@ def create_embedded_model(dataloaders, param, neptune_param, fold, seed):
     neptune_param = neptune_param
 
     #wkdir = os.getcwd() + "/SSL_Working"
-    wkdir = param["Parent_PATH"] + "/SSL_Working/" + param["DATASET"]
+    wkdir = param["Parent_PATH"] + "/SSL_Working/"# + param["DATASET"]
     
     sys.path.append(wkdir)
 
@@ -227,13 +227,14 @@ def train_one_epoch(epoch,
         gt_x = gt_x.type(torch.LongTensor).cuda()
 
         lbs_u_real = lbs_u_real.cuda()
+        gt_u = gt_u.cuda()
 
         if args["expert_predict"] == "right":
             # Compare human expert labels with ground truth labels
-            correct_predictions = torch.eq(lbs_x, gt_x).type(torch.LongTensor)
+            correct_predictions = torch.eq(lbs_x, gt_x).type(torch.LongTensor).cuda()
             lbs_x = correct_predictions
 
-            correct_predictions = torch.eq(lbs_u_real, gt_u).type(torch.LongTensor)
+            correct_predictions = torch.eq(lbs_u_real, gt_u).type(torch.LongTensor).cuda()
             lbs_u_real = correct_predictions
 
         # --------------------------------------
@@ -411,10 +412,10 @@ def evaluate(model, ema_model, emb_model, dataloader, param):
         for ims, lbs, im_id, gt in dataloader:
             ims = ims.cuda()
             lbs = lbs.cuda()
-            gt.cuda()
+            gt = gt.cuda()
 
             if param["EXPERT_PREDICT"] == "right":
-                correct_predictions = torch.eq(lbs, gt).type(torch.LongTensor)
+                correct_predictions = torch.eq(lbs, gt).type(torch.LongTensor).cuda()
                 lbs = correct_predictions
 
             embedding = emb_model.get_embedding(batch=ims)
