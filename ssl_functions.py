@@ -41,7 +41,7 @@ def create_embedded_model(dataloaders, param, neptune_param, fold, seed):
     neptune_param = neptune_param
 
     #wkdir = os.getcwd() + "/SSL_Working"
-    wkdir = param["Parent_PATH"] + "/SSL_Working/" + run_param["DATASET"]
+    wkdir = param["Parent_PATH"] + "/SSL_Working/" + param["DATASET"]
     
     sys.path.append(wkdir)
 
@@ -220,11 +220,21 @@ def train_one_epoch(epoch,
     epoch_start = time.time()  # start time
     dl_x, dl_u = iter(dltrain_x), iter(dltrain_u)
     for it in range(n_iters):
-        ims_x_weak, lbs_x, im_id = next(dl_x)
-        (ims_u_weak, ims_u_strong0, ims_u_strong1), lbs_u_real, im_id = next(dl_u)
+        ims_x_weak, lbs_x, im_id, gt_x = next(dl_x) #transformed image, expert label, filename, gt_labels
+        (ims_u_weak, ims_u_strong0, ims_u_strong1), lbs_u_real, im_id, gt_u = next(dl_u) #transformed images, expert label, filename, gt_labels
 
         lbs_x = lbs_x.type(torch.LongTensor).cuda()
+        gt_x = gt_x.type(torch.LongTensor).cuda()
+
         lbs_u_real = lbs_u_real.cuda()
+
+        if args["expert_predict"] == "right":
+            # Compare human expert labels with ground truth labels
+            correct_predictions = torch.eq(lbs_x, gt_x).type(torch.LongTensor)
+            lbs_x = correct_predictions
+
+            correct_predictions = torch.eq(lbs_u_real, gt_u).type(torch.LongTensor)
+            lbs_u_real = correct_predictions
 
         # --------------------------------------
         bt = ims_x_weak.size(0)
@@ -482,6 +492,8 @@ def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded
     elif param["EMBEDDED"]["ARGS"]["model"] == "resnet50":
         args["type"] = "50"
     path = param["PATH"]
+
+    args["expert_predict"] = param["EXPERT_PREDICT"]
 
     #Setzt Logger fest
     out_path = f"{param['Parent_PATH']}/SSL_Working/{param['DATASET']}/SSL/"

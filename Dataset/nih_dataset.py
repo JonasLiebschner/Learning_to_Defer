@@ -897,33 +897,42 @@ class SSLDataset(SSLDataset):
     
     def getTrainDataset(self, labelerId, fold_idx):
         train_data, _, _ = self.getDatasetsForExpert(labelerId, fold_idx)
+        gt_train, _, _ = self.k_fold_datasets[fold_idx][["Image ID", "GT"]]
+        
         X = np.array(train_data["Image ID"])
         y = np.array(train_data[str(labelerId)])
+        gt = np.array(gt_train["GT"])
         
         all_indices = [i for i in range(len(y))]
         labeled_indices = self.getLabeledIndices(labelerId, fold_idx)
         
         data_x = [X[ind] for ind in labeled_indices]
         label_x = [y[ind] for ind in labeled_indices]
+        gt_x = [gt[ind] for ind in labeled_indices]
         
         data_u = [X[ind] for ind in all_indices if (ind not in labeled_indices)]
         label_u = [y[ind] for ind in all_indices if (ind not in labeled_indices)]
+        gt_u = [gt[ind] for ind in all_indices if (ind not in labeled_indices)]
         
-        return data_x, label_x, data_u, label_u
+        return data_x, label_x, gt_x, data_u, label_u, gt_u
     
     def getValDataset(self, labelerId, fold_idx):
         _, val_data, _ = self.getDatasetsForExpert(labelerId, fold_idx)
+        _, val_gt, _ = self.k_fold_datasets[fold_idx][["Image ID", "GT"]]
         X = np.array(val_data["Image ID"])
         y = np.array(val_data[str(labelerId)])
+        gt = np.array(val_gt["GT"])
         
-        return X, y
+        return X, y, gt
     
     def getTestDataset(self, labelerId, fold_idx):
         _, _, test_data = self.getDatasetsForExpert(labelerId, fold_idx)
+        _, _, test_gt = self.k_fold_datasets[fold_idx][["Image ID", "GT"]]
         X = np.array(test_data["Image ID"])
         y = np.array(test_data[str(labelerId)])
+        gt = np.array(test_gt["GT"])
         
-        return X, y
+        return X, y, gt
         
     
     def get_train_loader_interface(self, expert, batch_size, mu, n_iters_per_epoch, L, method='comatch', imsize=(128, 128), fold_idx=0, pin_memory=False):
@@ -1177,9 +1186,9 @@ class NIH_SSL_Dataset(SSL_Dataset):
                     self.images.append(self.loadImage(idx))
 
     def __getitem__(self, index: int):
-        filename, label = self.image_ids[index], self.labels[index]
+        filename, label = self.image_ids[index], self.labels[index], self.gt[index]
         im = self.images[index]
-        return self.trans(im), label, filename
+        return self.trans(im), label, filename, gt
 
     def __len__(self) -> int:
         return len(self.images)

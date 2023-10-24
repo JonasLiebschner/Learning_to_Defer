@@ -102,7 +102,7 @@ class ImageContainerCIFAR10N(dsc.ImageContainer):
         for idx in range(len(self.image_ids)):
             self.images.append(self.loadImage(idx))
 
-            if idx % 1000 == 0:
+            if idx % 10000 == 0:
                 print("Loaded image number: " + str(idx))
             
             if self.preprocess:
@@ -131,6 +131,10 @@ class ImageContainerCIFAR10N(dsc.ImageContainer):
 
     def get_images_from_name(self, fnames):
         if self.preload:
+            #print("DELETE ME")
+            #print(fnames)
+            #print(np.where(self.image_ids == fname))
+            #print(self.image_ids)
             return [self.images[np.where(self.image_ids == fname)[0][0]] for fname in fnames]
         else:
             return [self.get_image_from_id(np.where(self.image_ids == fname)[0][0]) for fname in fnames]
@@ -271,6 +275,10 @@ class CIFAR10NDataset(dsc.Dataset):
     def __init__(self, data: pd.DataFrame, transformation=None, preload=False, preprocess=False, param=None, image_container=None, size=(128, 128)):
         self.data = data
         self.image_ids = data["Image ID"].values
+        #print("DELETE ME")
+        #print(self.image_ids)
+        #print("DELETE ME")
+        #print(self.image_ids.astype("int"))
         self.targets = data["GT"].values
 
         if transformation == None:
@@ -555,9 +563,13 @@ class CIFAR10NSSLDataset(dsc.SSLDataset):
             val_ids = used_val["Image ID"]
             test_ids = used_test["Image ID"]
 
-            expert_train = self.labels[self.labels[:].isin(train_ids)]
-            expert_val = self.labels[self.labels[:].isin(val_ids)]
-            expert_test = self.labels[self.labels[:].isin(test_ids)]
+            expert_train = self.labels[self.labels["Image ID"].isin(train_ids)]
+            expert_val = self.labels[self.labels["Image ID"].isin(val_ids)]
+            expert_test = self.labels[self.labels["Image ID"].isin(test_ids)]
+
+            #expert_train = used_train
+            #expert_val = val_ids
+            #expert_test = test_ids
 
             self.k_fold_datasets.append((expert_train, expert_val, expert_test))
             self.k_fold_datasets_labeled.append((used_train, used_val, used_test))
@@ -582,6 +594,10 @@ class CIFAR10NSSLDataset(dsc.SSLDataset):
             warnings.warn("k was bigger than n")
             
         data = data.reset_index(drop=True)
+
+        print("DELETE ME")
+        print("sampleIndices")
+        print(data)
             
         #Get all indices
         all_indices = indices = [j for j in range(len(data))]
@@ -710,45 +726,56 @@ class CIFAR10NSSLDataset(dsc.SSLDataset):
     
     def getTrainDataset(self, labelerId, fold_idx):
         train_data, _, _ = self.getDatasetsForExpert(labelerId, fold_idx)
+        gt_train, _, _ = self.k_fold_datasets[fold_idx][["Image ID", "GT"]]
         X = np.array(train_data["Image ID"])
         y = np.array(train_data[str(labelerId)])
+        gt = np.array(gt_train["GT"])
         
         all_indices = [i for i in range(len(y))]
         labeled_indices = self.getLabeledIndices(labelerId, fold_idx)
         
         data_x = [X[ind] for ind in labeled_indices]
         label_x = [y[ind] for ind in labeled_indices]
+        gt_x = [gt[ind] for ind in labeled_indices]
         
         data_u = [X[ind] for ind in all_indices if (ind not in labeled_indices)]
         label_u = [y[ind] for ind in all_indices if (ind not in labeled_indices)]
+        gt_u = [gt[ind] for ind in all_indices if (ind not in labeled_indices)]
         
-        return data_x, label_x, data_u, label_u
+        return data_x, label_x, gt_x, data_u, label_u, gt_u
     
     def getValDataset(self, labelerId, fold_idx):
         _, val_data, _ = self.getDatasetsForExpert(labelerId, fold_idx)
+        _, val_gt, _ = self.k_fold_datasets[fold_idx][["Image ID", "GT"]]
+        
         X = np.array(val_data["Image ID"])
         y = np.array(val_data[str(labelerId)])
+        gt = np.array(val_gt["GT"])
         
-        return X, y
+        return X, y, gt
     
     def getTestDataset(self, labelerId, fold_idx):
         _, _, test_data = self.getDatasetsForExpert(labelerId, fold_idx)
+        _, _, test_gt = self.k_fold_datasets[fold_idx][["Image ID", "GT"]]
+        
         X = np.array(test_data["Image ID"])
         y = np.array(test_data[str(labelerId)])
+        gt = np.array(test_gt["GT"])
         
-        return X, y
+        return X, y, gt
         
     
     def get_train_loader_interface(self, expert, batch_size, mu, n_iters_per_epoch, L, method='comatch', imsize=(128, 128), fold_idx=0, pin_memory=False):
         labeler_id = expert.labeler_id
         
-        data_x, label_x, data_u, label_u = self.getTrainDataset(labeler_id, fold_idx)
+        data_x, label_x, gt_x, data_u, label_u, gt_u = self.getTrainDataset(labeler_id, fold_idx)
         
         #print(f'Label check: {Counter(label_x)}')
         print("Labels: " + str(len(label_x)))
         ds_x = CIFAR10N_SSL_Dataset(
             data=data_x,
             labels=label_x,
+            gt=gt_x,
             mode='train_x',
             image_container=self.imageContainer,
             imsize=imsize
@@ -768,6 +795,7 @@ class CIFAR10NSSLDataset(dsc.SSLDataset):
             ds_u = CIFAR10N_SSL_Dataset(
                 data=data_u,
                 labels=label_u,
+                gt=gt_u,
                 mode='train_u_%s'%method,
                 image_container=self.imageContainer,
                 imsize=imsize
@@ -795,11 +823,12 @@ class CIFAR10NSSLDataset(dsc.SSLDataset):
         :return: Dataloader
         """
         labeler_id = expert.labeler_id
-        data, labels = self.getValDataset(labeler_id, fold_idx)
+        data, labels, gt = self.getValDataset(labeler_id, fold_idx)
 
         ds = CIFAR10N_SSL_Dataset(
             data=data,
             labels=labels,
+            gt = gt,
             mode='val',
             imsize=imsize,
             image_container=self.imageContainer
@@ -826,11 +855,12 @@ class CIFAR10NSSLDataset(dsc.SSLDataset):
         :return: Dataloader
         """
         labeler_id = expert.labeler_id
-        data, labels = self.getTestDataset(labeler_id, fold_idx)
+        data, labels, gt = self.getTestDataset(labeler_id, fold_idx)
 
         ds = CIFAR10N_SSL_Dataset(
             data=data,
             labels=labels,
+            gt=gt,
             mode='test',
             imsize=imsize,
             image_container=self.imageContainer
@@ -868,6 +898,16 @@ class CIFAR10NSSLDataset(dsc.SSLDataset):
 
     def create_Dataloader_for_Fold(self, idx):
         expert_train, expert_val, expert_test = self.k_fold_datasets[idx]
+
+        #print("DELETE ME")
+        #print("Create_Dataloader_for_Fold")
+        #print(f"Fold {idx}")
+        #print("expert_train")
+        #print(expert_train)
+        #print("expert_val")
+        #print(expert_val)
+        #print("expert_test")
+        #print(expert_test)
 
         expert_train_dataset = CIFAR10NDataset(expert_train, preload=self.preload, preprocess=self.preprocess, param=self.param, image_container=self.imageContainer)
         expert_val_dataset = CIFAR10NDataset(expert_val, preload=self.preload, preprocess=self.preprocess, param=self.param, image_container=self.imageContainer)
@@ -908,9 +948,10 @@ class CIFAR10N_SSL_Dataset(dsc.SSL_Dataset):
     :ivar labels: Labels
     :ivar mode: Mode
     """
-    def __init__(self, data, labels, mode, image_container=None, imsize=(128, 128)) -> None:
+    def __init__(self, data, labels, gt, mode, image_container=None, imsize=(128, 128)) -> None:
         self.image_ids = data
         self.labels = labels
+        self.gt = gt
         self.mode = mode
         self.image_container = image_container
 
@@ -990,9 +1031,9 @@ class CIFAR10N_SSL_Dataset(dsc.SSL_Dataset):
                     self.images.append(self.loadImage(idx))
 
     def __getitem__(self, index: int):
-        filename, label = self.image_ids[index], self.labels[index]
+        filename, label, gt = self.image_ids[index], self.labels[index], self.gt[index]
         im = self.images[index]
-        return self.trans(im), label, filename
+        return self.trans(im), label, filename, gt
 
     def __len__(self) -> int:
         
