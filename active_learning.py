@@ -63,7 +63,7 @@ class NIHExpertDatasetMemory():
         expert_preds: used if expert_fn or have different expert model
         """
         self.preprocess = preprocess
-        if param["DATASET"] == "NIH":
+        if param["DATASET"] == "NIH" or param["DATASET"] == "VIN":
             self.filenames = filenames
         elif param["DATASET"] == "CIFAR10N":
             self.filenames = [int(filename) for filename in filenames]
