@@ -72,7 +72,7 @@ class BasicDatasetCIFAR10N(dsc.BasicDataset):
         """
         Returns all data
         """
-        return self.data
+        return self.data.copy()
     
     def getDataForLabelers(self, labelerIds):
         """
@@ -84,11 +84,11 @@ class BasicDatasetCIFAR10N(dsc.BasicDataset):
         return temp
 
 class ImageContainerCIFAR10N(dsc.ImageContainer):
-    def __init__(self, basicDataset, preload=True, transform=None, preprocess=False, img_size=(128, 128)):
+    def __init__(self, basicDataset, preload=True, transform=None, preprocess=False, img_size=(32, 32)):
         self.data = basicDataset.cifar_trainset.data
         self.targets = basicDataset.cifar_trainset.targets
         
-        self.image_ids = basicDataset.data["Image ID"]
+        self.image_ids = basicDataset.getData()["Image ID"]
         self.preload = preload
         self.preprocess = preprocess
         self.img_size = img_size
@@ -131,19 +131,20 @@ class ImageContainerCIFAR10N(dsc.ImageContainer):
 
     def get_images_from_name(self, fnames):
         if self.preload:
-            print("DELETE ME")
-            print(fnames)
-            print(np.where(self.image_ids == fnames[0]))
-            print(self.image_ids)
-            return [self.images[np.where(self.image_ids == fname)[0][0]] for fname in fnames]
+            #print("DELETE ME")
+            #print("get_images_from_name")
+            #print(fnames)
+            #print(np.where(self.image_ids == int(fnames[0])))
+            #print(self.image_ids)
+            return [self.images[np.where(self.image_ids == int(fname))[0][0]] for fname in fnames]
         else:
-            return [self.get_image_from_id(np.where(self.image_ids == fname)[0][0]) for fname in fnames]
+            return [self.get_image_from_id(np.where(self.image_ids == int(fname))[0][0]) for fname in fnames]
 
     def get_images_from_name_np(self, fnames):
         if self.preload:
-            return [np.array(self.images[np.where(self.image_ids == fname)[0][0]]) for fname in fnames]
+            return [np.array(self.images[np.where(self.image_ids == int(fname))[0][0]]) for fname in fnames]
         else:
-            return [np.array(self.get_image_from_id(np.where(self.image_ids == fname)[0][0])) for fname in fnames]
+            return [np.array(self.get_image_from_id(np.where(self.image_ids == int(fname))[0][0])) for fname in fnames]
 
 
 class CIFAR10N_K_Fold_Dataloader(dsc.K_Fold_Dataloader):
@@ -179,7 +180,7 @@ class CIFAR10N_K_Fold_Dataloader(dsc.K_Fold_Dataloader):
         
         self.labels["Image ID"] = self.labels["Image ID"].astype('category')
 
-        self.image_container = ImageContainerCIFAR10N(self.dataset, preload=True, transform=None, preprocess=False, img_size=(128, 128))
+        self.image_container = ImageContainerCIFAR10N(self.dataset, preload=True, transform=None, preprocess=False, img_size=(self.param["IMAGE_SIZE"], self.param["IMAGE_SIZE"]))
 
         kf_cv = StratifiedKFold(n_splits=self.k, shuffle=True, random_state=self.seed)
 
@@ -272,7 +273,7 @@ class CIFAR10N_K_Fold_Dataloader(dsc.K_Fold_Dataloader):
 class CIFAR10NDataset(dsc.Dataset):
     """
     """
-    def __init__(self, data: pd.DataFrame, transformation=None, preload=False, preprocess=False, param=None, image_container=None, size=(128, 128)):
+    def __init__(self, data: pd.DataFrame, transformation=None, preload=False, preprocess=False, param=None, image_container=None, size=(32, 32)):
         self.data = data
         self.image_ids = data["Image ID"].values
         #print("DELETE ME")
@@ -284,7 +285,7 @@ class CIFAR10NDataset(dsc.Dataset):
         if transformation == None:
             self.tfms = transforms.Compose(
             [
-                transforms.Resize(128),
+                transforms.Resize(size[0]),
                 transforms.ToTensor(),
                 transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
             ])
@@ -463,7 +464,7 @@ class CIFAR10NDataManager(dsc.DataManager):
         
         self.basicDataset = BasicDatasetCIFAR10N(path_labels, path_data)
         
-        self.fullImageContainer = ImageContainerCIFAR10N(self.basicDataset, preload=True, transform=None, preprocess=False, img_size=(128, 128))
+        self.fullImageContainer = ImageContainerCIFAR10N(self.basicDataset, preload=True, transform=None, preprocess=False, img_size=(param["IMAGE_SIZE"], param["IMAGE_SIZE"]))
         
     
     def createData(self):
@@ -597,7 +598,7 @@ class CIFAR10NSSLDataset(dsc.SSLDataset):
 
         print("DELETE ME")
         print("sampleIndices")
-        print(data)
+        #print(data)
             
         #Get all indices
         all_indices = indices = [j for j in range(len(data))]
@@ -765,7 +766,7 @@ class CIFAR10NSSLDataset(dsc.SSLDataset):
         return X, y, gt
         
     
-    def get_train_loader_interface(self, expert, batch_size, mu, n_iters_per_epoch, L, method='comatch', imsize=(128, 128), fold_idx=0, pin_memory=False):
+    def get_train_loader_interface(self, expert, batch_size, mu, n_iters_per_epoch, L, method='comatch', imsize=(32, 32), fold_idx=0, pin_memory=False):
         labeler_id = expert.labeler_id
         
         data_x, label_x, gt_x, data_u, label_u, gt_u = self.getTrainDataset(labeler_id, fold_idx)
@@ -811,7 +812,7 @@ class CIFAR10NSSLDataset(dsc.SSLDataset):
             )
             return dl_x, dl_u
         
-    def get_val_loader_interface(self, expert, batch_size, num_workers, pin_memory=True, imsize=(128, 128), fold_idx=0):
+    def get_val_loader_interface(self, expert, batch_size, num_workers, pin_memory=True, imsize=(32, 32), fold_idx=0):
         """Get data loader for the validation set
 
         :param expert: Synthetic cifar expert
@@ -843,7 +844,7 @@ class CIFAR10NSSLDataset(dsc.SSLDataset):
         )
         return dl
     
-    def get_test_loader_interface(self, expert, batch_size, num_workers, pin_memory=True, imsize=(128, 128), fold_idx=0):
+    def get_test_loader_interface(self, expert, batch_size, num_workers, pin_memory=True, imsize=(32, 32), fold_idx=0):
         """Get data loader for the validation set
 
         :param expert: Synthetic cifar expert
@@ -948,7 +949,7 @@ class CIFAR10N_SSL_Dataset(dsc.SSL_Dataset):
     :ivar labels: Labels
     :ivar mode: Mode
     """
-    def __init__(self, data, labels, gt, mode, image_container=None, imsize=(128, 128)) -> None:
+    def __init__(self, data, labels, gt, mode, image_container=None, imsize=(32, 32)) -> None:
         self.image_ids = data
         self.labels = labels
         self.gt = gt
@@ -1080,7 +1081,7 @@ class ThreeCropsTransform:
         x1 = self.trans_weak(x)
         x2 = self.trans_strong0(x)
 
-        imsize = (128, 128)
+        imsize = (32, 32)
         mean, std = (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
         self.trans_strong1 = transforms.Compose([
             transforms.RandomResizedCrop(imsize, scale=(0.2, 1.)),
