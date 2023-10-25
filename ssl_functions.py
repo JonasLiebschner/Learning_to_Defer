@@ -498,6 +498,7 @@ def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded
     elif param["EMBEDDED"]["ARGS"]["model"] == "resnet50":
         args["type"] = "50"
     path = param["PATH"]
+    args["n_classes"] = param["n_classes"]
 
     args["expert_predict"] = param["EXPERT_PREDICT"]
 
