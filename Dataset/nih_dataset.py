@@ -58,7 +58,7 @@ class BasicDatasetNIH(BasicDataset):
         """
         Returns all data
         """
-        return self.data
+        return self.data.copy()
     
     def getDataForLabelers(self, labelerIds):
         """
