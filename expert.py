@@ -62,6 +62,8 @@ class Expert:
 
         #assert (test_array == new_array).all()
         #return new_array
+        if torch.is_tensor(fnames):
+            fnames = fnames.tolist()
         return np.array(self.predictions.loc[fnames, str(self.labelerId)])
 
     def predictSLL(self, img, target, fnames):
