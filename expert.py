@@ -113,13 +113,13 @@ class Expert:
                 elif prediction_type == "right":
                     target_prediction = []
                     for i in range(len(result)):
-                        gt = self.gt[self.gt["Image ID"] == hpred[i]]
+                        gt = self.gt[self.gt["Image ID"] == hpred[i]]["GT"].item()
                         if result[i] == 1:
-                            target_prediction = gt
+                            target_prediction.append(gt)
                         else:
                             sample_list = self.gt_values.copy()
-                            sample_list.remove(gt)
-                            target_prediction = random.sample(sample_list, k=1)
+                            sample_list = np.delete(sample_list, np.where(sample_list == gt))
+                            target_prediction.append(random.sample(list(sample_list), k=1))
                     self.prebuild_predictions_ssl += target_prediction
                 
                 self.prebuild_filenames_ssl += hpred
@@ -132,13 +132,13 @@ class Expert:
                 elif prediction_type == "right":
                     target_prediction = []
                     for i in range(len(result)):
-                        gt = self.gt[self.gt["Image ID"] == hpred[i]]
+                        gt = self.gt[self.gt["Image ID"] == hpred[i]]["GT"].item()
                         if result[i] == 1:
-                            target_prediction = gt
+                            target_prediction.append(gt)
                         else:
                             sample_list = self.gt_values.copy()
-                            sample_list.remove(gt)
-                            target_prediction = random.sample(sample_list, k=1)
+                            sample_list = np.delete(sample_list, np.where(sample_list == gt))
+                            target_prediction.append(random.sample(list(sample_list), k=1))
                     self.prebuild_predictions_al += target_prediction
                     
                 self.prebuild_filenames_al += hpred
