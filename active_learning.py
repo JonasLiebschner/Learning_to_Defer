@@ -65,7 +65,7 @@ class NIHExpertDatasetMemory():
         self.preprocess = preprocess
         if param["DATASET"] == "NIH" or param["DATASET"] == "VIN":
             self.filenames = filenames
-        elif param["DATASET"] == "CIFAR10N":
+        elif param["DATASET"] == "CIFAR10N" or param["DATASET"] == "CIFAR100":
             self.filenames = [int(filename) for filename in filenames]
         self.targets = np.array(targets)
         self.expert_fn = expert_fn
