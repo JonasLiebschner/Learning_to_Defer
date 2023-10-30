@@ -148,7 +148,7 @@ class ImageContainerCIFAR10N(dsc.ImageContainer):
 
 
 class CIFAR10N_K_Fold_Dataloader(dsc.K_Fold_Dataloader):
-    def __init__(self, dataset, k=10, labelerIds=[4323195249 , 4295194124], train_batch_size=8, test_batch_size=8,
+    def __init__(self, dataset, k=10, labelerIds=[1, 2], train_batch_size=8, test_batch_size=8,
                  seed=42, fraction=1.0, preload=False, preprocess=False, prebuild=False, param=None):
         self.dataset = dataset
         self.data = self.dataset.getData()
