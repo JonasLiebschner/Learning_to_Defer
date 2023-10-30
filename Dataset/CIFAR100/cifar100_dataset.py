@@ -5,6 +5,7 @@ import os
 import copy
 
 import hashlib
+import json
 
 import random
 from itertools import chain
@@ -40,16 +41,19 @@ import Dataset.dataset_classes as dsc
 import Dataset.CIFAR100.Synthetic_CIFAR_Expert.generate_synthetic_experts as synex
 
 
-class BasicDatasetCIFAR10N(dsc.BasicDataset):
+class BasicDatasetCIFAR100(dsc.BasicDataset):
     """
     Contains the main Dataset with GT Label and Expert Label for every Image, sorted by file name
     """
     def __init__(self, path_labels, path_data):
 
         self.path_labels = path_labels
-        self.cifar_dataset = load_cifar_100(path_data)
+        self.cifar_dataset = self.load_cifar_100(path_data)
+        self.cifar_trainset = self.cifar_dataset #Rework needed (make function isntead of direkt call)
         self.gt_df = pd.DataFrame({"GT": self.cifar_dataset.targets})
         self.gt_df = self.gt_df.rename_axis("Image ID").reset_index()
+
+        self.data = self.gt_df.copy()
 
         print("Number of images of the whole dataset: " + str(len(self.gt_df["Image ID"].values)))
         
@@ -61,24 +65,30 @@ class BasicDatasetCIFAR10N(dsc.BasicDataset):
             [transforms.ToTensor(),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
         return torchvision.datasets.CIFAR100(root=f'{path}/CIFAR100', train=True, download=True, transform=transform)
+
+    def set_label_seed(self, seed):
+        self.data = self.gt_df.copy()
+        for name, expert_label in self.expert_labels[seed].items():
+            self.data[name] = expert_label
         
 
-    def get_synthetic_labels(self, path, experts_args, seed):
-        expert_labels = {}
-        for name, expert_arg in experts_args.items():
-            path_name = self. expert_to_path(name, expert_arg.copy(), seed)
-            if self.check_if_expert_exists(path, path_name, expert_arg["strength"]):
-                expert_labels[seed][name] == self.load_expert_from_path(pat, path_name, expert_arg["strength"])
+    def init_synthetic_labels(self, experts_args, seed):
+        path = self.path_labels
+        self.expert_labels = {seed: {},}
+        for name, expert_args in experts_args.items():
+            path_name = self. expert_to_path(name, expert_args.copy(), seed)
+            if self.check_if_expert_exists(path, path_name, expert_args["strength"]):
+                self.expert_labels[seed][name] = self.load_expert_from_path(path, path_name, expert_args["strength"])
             else:
-                expert_labels[seed][name] == self.create_synthetic_labels(expert_args, name, seed)["train"]
+                self.expert_labels[seed][name] = self.create_synthetic_labels(expert_args, name, seed)["train"]
              
-        return self.synthetic_labels
+        return self.expert_labels
 
     def create_synthetic_labels(self, expert_args, name, seed):
-        expert_labels = synex.generate_synthetic_expert(strength=expert_arg["strength"], binary=expert_arg["binary"], num_classes=expert_arg["num_classes"], per_s=expert_arg["per_s"], per_w=expert_arg["per_w"], seed=seed, path=self.path_labels, name=name)
+        expert_labels = synex.generate_synthetic_expert(strength=expert_args["strength"], binary=expert_args["binary"], num_classes=expert_args["num_classes"], per_s=expert_args["per_s"], per_w=expert_args["per_w"], seed=seed, path=self.path_labels, name=name)
         return expert_labels
 
-    def check_if_expert_exists(self, path, name_path, strength):
+    def check_if_expert_exists(self, path, path_name, strength):
         my_file = Path(f'{path}/synthetic_experts/{path_name}/cifar100_expert_{strength}_labels.json')
         return my_file.is_file()
 
@@ -122,7 +132,7 @@ class BasicDatasetCIFAR10N(dsc.BasicDataset):
             temp[str(labelerId)] = self.data[str(labelerId)]
         return temp
 
-class ImageContainerCIFAR10N(dsc.ImageContainer):
+class ImageContainerCIFAR100(dsc.ImageContainer):
     def __init__(self, basicDataset, preload=True, transform=None, preprocess=False, img_size=(32, 32)):
         self.data = basicDataset.cifar_trainset.data
         self.targets = basicDataset.cifar_trainset.targets
@@ -186,7 +196,7 @@ class ImageContainerCIFAR10N(dsc.ImageContainer):
             return [np.array(self.get_image_from_id(np.where(self.image_ids == int(fname))[0][0])) for fname in fnames]
 
 
-class CIFAR10N_K_Fold_Dataloader(dsc.K_Fold_Dataloader):
+class CIFAR100_K_Fold_Dataloader(dsc.K_Fold_Dataloader):
     def __init__(self, dataset, k=10, labelerIds=[1, 2], train_batch_size=8, test_batch_size=8,
                  seed=42, fraction=1.0, preload=False, preprocess=False, prebuild=False, param=None):
         self.dataset = dataset
@@ -219,7 +229,7 @@ class CIFAR10N_K_Fold_Dataloader(dsc.K_Fold_Dataloader):
         
         self.labels["Image ID"] = self.labels["Image ID"].astype('category')
 
-        self.image_container = ImageContainerCIFAR10N(self.dataset, preload=True, transform=None, preprocess=False, img_size=(self.param["IMAGE_SIZE"], self.param["IMAGE_SIZE"]))
+        self.image_container = ImageContainerCIFAR100(self.dataset, preload=True, transform=None, preprocess=False, img_size=(self.param["IMAGE_SIZE"], self.param["IMAGE_SIZE"]))
 
         kf_cv = StratifiedKFold(n_splits=self.k, shuffle=True, random_state=self.seed)
 
@@ -282,9 +292,9 @@ class CIFAR10N_K_Fold_Dataloader(dsc.K_Fold_Dataloader):
     def create_Dataloader_for_Fold(self, idx):
         expert_train, expert_val, expert_test = self.k_fold_datasets[idx]
 
-        expert_train_dataset = CIFAR10NDataset(expert_train, preload=self.preload, preprocess=self.preprocess, param=self.param, image_container=self.image_container)
-        expert_val_dataset = CIFAR10NDataset(expert_val, preload=self.preload, preprocess=self.preprocess, param=self.param, image_container=self.image_container)
-        expert_test_dataset = CIFAR10NDataset(expert_test, preload=self.preload, preprocess=self.preprocess, param=self.param, image_container=self.image_container)
+        expert_train_dataset = CIFAR100Dataset(expert_train, preload=self.preload, preprocess=self.preprocess, param=self.param, image_container=self.image_container)
+        expert_val_dataset = CIFAR100Dataset(expert_val, preload=self.preload, preprocess=self.preprocess, param=self.param, image_container=self.image_container)
+        expert_test_dataset = CIFAR100Dataset(expert_test, preload=self.preload, preprocess=self.preprocess, param=self.param, image_container=self.image_container)
 
         train_loader = torch.utils.data.DataLoader(dataset=expert_train_dataset, batch_size=self.train_batch_size, num_workers=self.num_workers, shuffle=True, drop_last=False, pin_memory=True)
         val_loader = torch.utils.data.DataLoader(dataset=expert_val_dataset, batch_size=self.test_batch_size, num_workers=self.num_workers, shuffle=True, drop_last=False, pin_memory=True)
@@ -300,7 +310,7 @@ class CIFAR10N_K_Fold_Dataloader(dsc.K_Fold_Dataloader):
             print("Loaded set number " + str(i))
 
     def getFullDataloader(self):
-        full_dataset = CIFAR10NDataset(self.labels[["Image ID", "GT"]], preload=self.preload, preprocess=self.preprocess, param=self.param, image_container=self.image_container)
+        full_dataset = CIFAR100Dataset(self.labels[["Image ID", "GT"]], preload=self.preload, preprocess=self.preprocess, param=self.param, image_container=self.image_container)
         return torch.utils.data.DataLoader(dataset=full_dataset, batch_size=self.train_batch_size, num_workers=self.num_workers, shuffle=True, drop_last=False, pin_memory=True)
 
     def get_ImageContainer(self):
@@ -309,7 +319,7 @@ class CIFAR10N_K_Fold_Dataloader(dsc.K_Fold_Dataloader):
     def getData(self):
         return self.labels
 
-class CIFAR10NDataset(dsc.Dataset):
+class CIFAR100Dataset(dsc.Dataset):
     """
     """
     def __init__(self, data: pd.DataFrame, transformation=None, preload=False, preprocess=False, param=None, image_container=None, size=(32, 32)):
@@ -475,7 +485,7 @@ class CIFAR10NDataset(dsc.Dataset):
         return self.data.index
     
     
-class CIFAR10NDataManager(dsc.DataManager):
+class CIFAR100DataManager(dsc.DataManager):
     """
     Class to contain and manage all data for all experiments
     
@@ -501,9 +511,9 @@ class CIFAR10NDataManager(dsc.DataManager):
         
         self.labeler_ids = param["LABELER_IDS"]
         
-        self.basicDataset = BasicDatasetCIFAR10N(path_labels, path_data)
+        self.basicDataset = BasicDatasetCIFAR100(path_labels, path_data)
         
-        self.fullImageContainer = ImageContainerCIFAR10N(self.basicDataset, preload=True, transform=None, preprocess=False, img_size=(param["IMAGE_SIZE"], param["IMAGE_SIZE"]))
+        self.fullImageContainer = ImageContainerCIFAR100(self.basicDataset, preload=True, transform=None, preprocess=False, img_size=(param["IMAGE_SIZE"], param["IMAGE_SIZE"]))
         
     
     def createData(self):
@@ -513,8 +523,11 @@ class CIFAR10NDataManager(dsc.DataManager):
         
         for seed in self.seeds:
             self.set_seed(seed)
+
+            self.basicDataset.init_synthetic_labels(self.param["CIFAR100"]["EXPERTS"], seed)
+            self.basicDataset.set_label_seed(seed)
         
-            self.kFoldDataloaders[seed] = CIFAR10N_K_Fold_Dataloader(
+            self.kFoldDataloaders[seed] = CIFAR100_K_Fold_Dataloader(
                     dataset = self.basicDataset,
                     k = self.param["K"],
                     labelerIds = self.labeler_ids,
@@ -527,7 +540,7 @@ class CIFAR10NDataManager(dsc.DataManager):
                     param = self.param
                 )
             #TODO: Anpassen
-            self.SSLDatasets[seed] = CIFAR10NSSLDataset(dataset=self.basicDataset, kFoldDataloader=self.kFoldDataloaders[seed], imageContainer=self.fullImageContainer, 
+            self.SSLDatasets[seed] = CIFAR100SSLDataset(dataset=self.basicDataset, kFoldDataloader=self.kFoldDataloaders[seed], imageContainer=self.fullImageContainer, 
                                                                   labeler_ids=self.labeler_ids, param=self.param, seed=seed, prebuild = self.param["SSL"]["PREBUILD"])
         
          
@@ -542,7 +555,7 @@ class CIFAR10NDataManager(dsc.DataManager):
     
 ### Bish hier hin bearbeitet
 
-class CIFAR10NSSLDataset(dsc.SSLDataset):
+class CIFAR100SSLDataset(dsc.SSLDataset):
     def __init__(self, dataset, kFoldDataloader, imageContainer, labeler_ids, param, seed, prebuild=False):
         self.basicDataset = dataset
         self.kFoldDataloader = kFoldDataloader
@@ -812,7 +825,7 @@ class CIFAR10NSSLDataset(dsc.SSLDataset):
         
         #print(f'Label check: {Counter(label_x)}')
         print("Labels: " + str(len(label_x)))
-        ds_x = CIFAR10N_SSL_Dataset(
+        ds_x = CIFAR100_SSL_Dataset(
             data=data_x,
             labels=label_x,
             gt=gt_x,
@@ -832,7 +845,7 @@ class CIFAR10NSSLDataset(dsc.SSLDataset):
         if data_u is None:
             return dl_x
         else:
-            ds_u = CIFAR10N_SSL_Dataset(
+            ds_u = CIFAR100_SSL_Dataset(
                 data=data_u,
                 labels=label_u,
                 gt=gt_u,
@@ -865,7 +878,7 @@ class CIFAR10NSSLDataset(dsc.SSLDataset):
         labeler_id = expert.labeler_id
         data, labels, gt = self.getValDataset(labeler_id, fold_idx)
 
-        ds = CIFAR10N_SSL_Dataset(
+        ds = CIFAR100_SSL_Dataset(
             data=data,
             labels=labels,
             gt = gt,
@@ -897,7 +910,7 @@ class CIFAR10NSSLDataset(dsc.SSLDataset):
         labeler_id = expert.labeler_id
         data, labels, gt = self.getTestDataset(labeler_id, fold_idx)
 
-        ds = CIFAR10N_SSL_Dataset(
+        ds = CIFAR100_SSL_Dataset(
             data=data,
             labels=labels,
             gt=gt,
@@ -949,9 +962,9 @@ class CIFAR10NSSLDataset(dsc.SSLDataset):
         #print("expert_test")
         #print(expert_test)
 
-        expert_train_dataset = CIFAR10NDataset(expert_train, preload=self.preload, preprocess=self.preprocess, param=self.param, image_container=self.imageContainer)
-        expert_val_dataset = CIFAR10NDataset(expert_val, preload=self.preload, preprocess=self.preprocess, param=self.param, image_container=self.imageContainer)
-        expert_test_dataset = CIFAR10NDataset(expert_test, preload=self.preload, preprocess=self.preprocess, param=self.param, image_container=self.imageContainer)
+        expert_train_dataset = CIFAR100Dataset(expert_train, preload=self.preload, preprocess=self.preprocess, param=self.param, image_container=self.imageContainer)
+        expert_val_dataset = CIFAR100Dataset(expert_val, preload=self.preload, preprocess=self.preprocess, param=self.param, image_container=self.imageContainer)
+        expert_test_dataset = CIFAR100Dataset(expert_test, preload=self.preload, preprocess=self.preprocess, param=self.param, image_container=self.imageContainer)
 
         train_loader = torch.utils.data.DataLoader(dataset=expert_train_dataset, batch_size=self.train_batch_size, num_workers=self.num_workers, shuffle=True, drop_last=False, pin_memory=True)
         val_loader = torch.utils.data.DataLoader(dataset=expert_val_dataset, batch_size=self.test_batch_size, num_workers=self.num_workers, shuffle=True, drop_last=False, pin_memory=True)
@@ -967,7 +980,7 @@ class CIFAR10NSSLDataset(dsc.SSLDataset):
             print("Loaded set number " + str(i))
 
     def getFullDataloader(self):
-        full_dataset = CIFAR10NDataset(self.labels[["Image ID", "GT"]], preload=self.preload, preprocess=self.preprocess, param=self.param, image_container=self.imageContainer)
+        full_dataset = CIFAR100Dataset(self.labels[["Image ID", "GT"]], preload=self.preload, preprocess=self.preprocess, param=self.param, image_container=self.imageContainer)
         return torch.utils.data.DataLoader(dataset=full_dataset, batch_size=self.train_batch_size, num_workers=self.num_workers, shuffle=True, drop_last=False, pin_memory=True)
 
     def get_ImageContainer(self):
@@ -976,8 +989,8 @@ class CIFAR10NSSLDataset(dsc.SSLDataset):
     def getData(self):
         return self.labels
     
-class CIFAR10N_SSL_Dataset(dsc.SSL_Dataset):
-    """Class representing the CIFAR10N dataset
+class CIFAR100_SSL_Dataset(dsc.SSL_Dataset):
+    """Class representing the CIFAR100 dataset
 
     :param data: Images
     :param labels: Labels

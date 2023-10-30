@@ -3,14 +3,15 @@ import numpy as np
 from scipy.special import softmax
 import torch
 from sklearn.metrics.pairwise import cosine_similarity
+import os
 
-import src.preprocess_data as prep
+import Dataset.CIFAR100.Synthetic_CIFAR_Expert.src.preprocess_data as prep
 
 BATCHSIZE = 10
 EMB_MODEL = 'efficientnet-b1'
 
 
-def generate_error_probs():
+def generate_error_probs(path, name):
     """
     Generate the error probabilities for the synthetic experts.
     """
@@ -59,7 +60,8 @@ def generate_error_probs():
                 class_sims[int(c1)][int(c2)] = sim[0]
 
     # save the calculated similarities
-    np.save('data/class_sims.npy', class_sims)
+    os.makedirs(f'{path}data/{name}', exist_ok=True)
+    np.save(f'{path}data/{name}/class_sims.npy', class_sims)
 
     # calculate probabilities
     probs = np.zeros((100, 100))
@@ -70,7 +72,7 @@ def generate_error_probs():
         probs[i] = softmax(sim)
 
     # save the calculated probabilities
-    np.save('data/mistake_probs.npy', probs)
+    np.save(f'{path}data/{name}/mistake_probs.npy', probs)
 
 
 if __name__ == '__main__':
