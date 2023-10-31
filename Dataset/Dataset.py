@@ -906,45 +906,55 @@ class SSLDataset():
     
     def getTrainDataset(self, labelerId, fold_idx):
         train_data, _, _ = self.getDatasetsForExpert(labelerId, fold_idx)
+        gt_train, _, _ = self.k_fold_datasets[fold_idx]
+        
         X = np.array(train_data["Image ID"])
         y = np.array(train_data[str(labelerId)])
+        gt = np.array(gt_train["GT"])
         
         all_indices = [i for i in range(len(y))]
         labeled_indices = self.getLabeledIndices(labelerId, fold_idx)
         
         data_x = [X[ind] for ind in labeled_indices]
         label_x = [y[ind] for ind in labeled_indices]
+        gt_x = [gt[ind] for ind in labeled_indices]
         
         data_u = [X[ind] for ind in all_indices if (ind not in labeled_indices)]
         label_u = [y[ind] for ind in all_indices if (ind not in labeled_indices)]
+        gt_u = [gt[ind] for ind in all_indices if (ind not in labeled_indices)]
         
-        return data_x, label_x, data_u, label_u
+        return data_x, label_x, gt_x, data_u, label_u, gt_u
     
     def getValDataset(self, labelerId, fold_idx):
         _, val_data, _ = self.getDatasetsForExpert(labelerId, fold_idx)
+        _, val_gt, _ = self.k_fold_datasets[fold_idx]
         X = np.array(val_data["Image ID"])
         y = np.array(val_data[str(labelerId)])
+        gt = np.array(val_gt["GT"])
         
-        return X, y
+        return X, y, gt
     
     def getTestDataset(self, labelerId, fold_idx):
         _, _, test_data = self.getDatasetsForExpert(labelerId, fold_idx)
+        _, _, test_gt = self.k_fold_datasets[fold_idx]
         X = np.array(test_data["Image ID"])
         y = np.array(test_data[str(labelerId)])
+        gt = np.array(test_gt["GT"])
         
-        return X, y
+        return X, y, gt
         
     
     def get_train_loader_interface(self, expert, batch_size, mu, n_iters_per_epoch, L, method='comatch', imsize=(128, 128), fold_idx=0, pin_memory=False):
         labeler_id = expert.labeler_id
         
-        data_x, label_x, data_u, label_u = self.getTrainDataset(labeler_id, fold_idx)
+        data_x, label_x, gt_x, data_u, label_u, gt_u = self.getTrainDataset(labeler_id, fold_idx)
         
         #print(f'Label check: {Counter(label_x)}')
         print("Labels: " + str(len(label_x)))
         ds_x = NIH_SSL_Dataset(
             data=data_x,
             labels=label_x,
+            gt=gt_x,
             mode='train_x',
             image_container=self.imageContainer,
             imsize=imsize
@@ -964,6 +974,7 @@ class SSLDataset():
             ds_u = NIH_SSL_Dataset(
                 data=data_u,
                 labels=label_u,
+                gt=gt_u,
                 mode='train_u_%s'%method,
                 image_container=self.imageContainer,
                 imsize=imsize
@@ -990,11 +1001,12 @@ class SSLDataset():
         :return: Dataloader
         """
         labeler_id = expert.labeler_id
-        data, labels = self.getValDataset(labeler_id, fold_idx)
+        data, labels, gt = self.getValDataset(labeler_id, fold_idx)
 
         ds = NIH_SSL_Dataset(
             data=data,
             labels=labels,
+            gt=gt,
             mode='val',
             imsize=imsize,
             image_container=self.imageContainer
@@ -1021,11 +1033,12 @@ class SSLDataset():
         :return: Dataloader
         """
         labeler_id = expert.labeler_id
-        data, labels = self.getTestDataset(labeler_id, fold_idx)
+        data, labels, gt = self.getTestDataset(labeler_id, fold_idx)
 
         ds = NIH_SSL_Dataset(
             data=data,
             labels=labels,
+            gt=gt,
             mode='test',
             imsize=imsize,
             image_container=self.imageContainer
@@ -1103,9 +1116,10 @@ class NIH_SSL_Dataset(Dataset):
     :ivar labels: Labels
     :ivar mode: Mode
     """
-    def __init__(self, data, labels, mode, image_container=None, imsize=(128, 128)) -> None:
+    def __init__(self, data, labels, gt, mode, image_container=None, imsize=(128, 128)) -> None:
         self.image_ids = data
         self.labels = labels
+        self.gt = gt
         self.mode = mode
         self.image_container = image_container
 
@@ -1185,9 +1199,9 @@ class NIH_SSL_Dataset(Dataset):
                     self.images.append(self.loadImage(idx))
 
     def __getitem__(self, index: int):
-        filename, label = self.image_ids[index], self.labels[index]
+        filename, label, gt = self.image_ids[index], self.labels[index], self.gt[index]
         im = self.images[index]
-        return self.trans(im), label, filename
+        return self.trans(im), label, filename, gt
 
     def __len__(self) -> int:
         return len(self.images)
@@ -1232,44 +1246,5 @@ class ThreeCropsTransform:
     def __call__(self, x):
         x1 = self.trans_weak(x)
         x2 = self.trans_strong0(x)
-
-        imsize = (128, 128)
-        mean, std = (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)
-        self.trans_strong1 = transforms.Compose([
-            transforms.RandomResizedCrop(imsize, scale=(0.2, 1.)),
-            transforms.RandomHorizontalFlip(p=0.5),
-            transforms.RandomApply([
-                transforms2.ColorJitter(0.4, 0.4, 0.4, 0.1)
-            ], p=0.8),
-            transforms.RandomGrayscale(p=0.2),
-            transforms.ToTensor(),
-            transforms.Normalize(mean, std),
-        ])
-
-        #temp = transforms.ToTensor()(x)
-        temp = transforms2.ToImageTensor()(x)
-        temp = transforms2.ConvertDtype(torch.uint8)(temp)
-        #temp = transforms.ToPILImage()(x)
-        temp = transforms.RandomResizedCrop(imsize, scale=(0.2, 1.))(temp)
-        temp = transforms.RandomHorizontalFlip(p=0.5)(temp)
-        temp = transforms.RandomApply([
-                transforms2.ColorJitter(0.4, 0.4, 0.4, 0.1)
-            ], p=0.8)(temp)
-        temp = transforms.RandomGrayscale(p=0.2)(temp)
-        #temp = transforms.ToTensor()(temp)
-        temp = transforms2.ConvertDtype(torch.float32)(temp)
-        temp = transforms.Normalize(mean, std)(temp)
-        x3 = temp
-        
-        #x3 = self.trans_strong1(x)
-        """x3 = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.RandomResizedCrop(imsize, scale=(0.2, 1.)),
-            transforms.RandomHorizontalFlip(p=0.5),
-            transforms.RandomApply([
-                transforms2.ColorJitter(0.4, 0.4, 0.4, 0.1)
-            ], p=0.8),
-            transforms.RandomGrayscale(p=0.2),
-            transforms.Normalize(mean, std),
-        ])(x)"""
+        x3 = self.trans_strong1(x)
         return [x1, x2, x3]
