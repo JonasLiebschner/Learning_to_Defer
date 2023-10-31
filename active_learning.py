@@ -37,6 +37,8 @@ from AL.metrics import *
 from AL.neural_network import NetSimple
 from AL.neural_network import ResnetPretrained
 
+from sklearn.metrics import fbeta_score
+
 import Dataset.Dataset as ds
 import expert as ex
 
@@ -926,6 +928,8 @@ def metrics_print_expert(model, data_loader, expert=None, defer_net = False, id=
         tn, fp, fn, tp = sklearn.metrics.confusion_matrix(label_list, predictions_list, labels=[0, 1]).ravel()
         f1 = sklearn.metrics.f1_score(label_list, predictions_list)
         ac_balanced = sklearn.metrics.balanced_accuracy_score(label_list, predictions_list)
+        f_05 = fbeta_score(y_true, y_pred, beta=0.5)
+        f_2 = fbeta_score(y_true, y_pred, beta=2)
 
         met = {
             "tn": tn,
@@ -934,17 +938,23 @@ def metrics_print_expert(model, data_loader, expert=None, defer_net = False, id=
             "tp": tp,
             "accurancy": accurancy,
             "f1": f1,
+            "f0.5": f_05,
+            "f2": f_2,
             "accurancy_balanced": ac_balanced,
         }
     if param["n_classes"] >= 2:
         conf_matrix = sklearn.metrics.confusion_matrix(label_list, predictions_list, labels=[i for i in range(param["n_classes"])]).ravel()
-        f1 = sklearn.metrics.f1_score(label_list, predictions_list, average="micro")
+        f1 = sklearn.metrics.f1_score(label_list, predictions_list, average="macro")
         ac_balanced = sklearn.metrics.balanced_accuracy_score(label_list, predictions_list)
+        f_05 = fbeta_score(y_true, y_pred, average="macro", beta=0.5)
+        f_2 = fbeta_score(y_true, y_pred, average="macro", beta=2)
 
         met = {
             "conf_matrix": conf_matrix,
             "accurancy": accurancy,
             "f1": f1,
+            "f0.5": f_05,
+            "f2": f_2,
             "accurancy_balanced": ac_balanced,
         }
     
