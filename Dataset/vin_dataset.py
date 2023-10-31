@@ -30,13 +30,13 @@ from SSL.datasets.sampler import RandomSampler, BatchSampler
 
 import warnings
 
-import dataset_classes
+import Dataset.dataset_classes as dsc
 
 import pydicom
 from pydicom.pixel_data_handlers.util import apply_voi_lut
 
 
-class BasicDatasetVinBig(BasicDataset):
+class BasicDatasetVinBig(dsc.BasicDataset):
     """
     Contains the main Dataset with GT Label and Expert Label for every Image, sorted by file name
     """
@@ -95,7 +95,7 @@ class BasicDatasetVinBig(BasicDataset):
 
 ### Bis hierhin angepasst
 
-class VINDataset(Dataset):
+class VINDataset(dsc.Dataset):
     """
     """
     def __init__(self, data: pd.DataFrame, transformation=None, preload=False, preprocess=False, param=None, image_container=None, size=(128, 128)):
@@ -256,7 +256,7 @@ class VINDataset(Dataset):
     def getAllIndices(self):
         return self.data.index
 
-class VIN_K_Fold_Dataloader(K_Fold_Dataloader):
+class VIN_K_Fold_Dataloader(dsc.K_Fold_Dataloader):
     def __init__(self, dataset, k=10, labelerIds=[4323195249 , 4295194124], train_batch_size=8, test_batch_size=8,
                  seed=42, fraction=1.0, preload=False, preprocess=False, prebuild=False, param=None):
         self.dataset = dataset.getData()
@@ -392,7 +392,7 @@ class VIN_K_Fold_Dataloader(K_Fold_Dataloader):
         return self.labels[self.labels["Patient ID"].isin(self.patient_performance["Patient ID"])]
 
 
-class ImageContainerVIN(ImageContainer):
+class ImageContainerVIN(dsc.ImageContainer):
     def __init__(self, path, img_ids, preload=True, transform=None, preprocess=False, img_size=(128, 128)):
         self.PATH = path
         self.image_ids = img_ids.values
@@ -468,7 +468,7 @@ class ImageContainerVIN(ImageContainer):
         return data
     
     
-class DataManagerVIN(DataManager):
+class DataManagerVIN(dsc.DataManager):
     """
     Class to contain and manage all data for all experiments
     
@@ -535,7 +535,7 @@ class DataManagerVIN(DataManager):
         return self.basicDataset
     
     
-class VINSSLDataset(SSLDataset):
+class VINSSLDataset(dsc.SSLDataset):
     def __init__(self, dataset, kFoldDataloader, imageContainer, labeler_ids, param, seed, prebuild=False):
         self.basicDataset = dataset
         self.kFoldDataloader = kFoldDataloader
@@ -1008,7 +1008,7 @@ class VINSSLDataset(SSLDataset):
     def getData(self):
         return self.labels
     
-class VIN_SSL_Dataset(SSL_Dataset):
+class VIN_SSL_Dataset(dsc.SSL_Dataset):
     """Class representing the VIN dataset
 
     :param data: Images
