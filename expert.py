@@ -113,35 +113,40 @@ class Expert:
                 elif prediction_type == "right":
                     target_prediction = []
                     for i in range(len(result)):
-                        gt = self.gt[self.gt["Image ID"] == hpred[i]]
+                        gt = self.gt[self.gt["Image ID"] == hpred[i]]["GT"].item()
                         if result[i] == 1:
-                            target_prediction = gt
+                            target_prediction.append(gt)
                         else:
                             sample_list = self.gt_values.copy()
-                            sample_list.remove(gt)
-                            target_prediction = random.sample(sample_list, k=1)
+                            sample_list = np.delete(sample_list, np.where(sample_list == gt))
+                            target_prediction.append(random.sample(list(sample_list), k=1)[0])
                     self.prebuild_predictions_ssl += target_prediction
                 
                 self.prebuild_filenames_ssl += hpred
             print("Len prebuild predictions: " + str(len(self.prebuild_predictions_ssl)))
         elif mod == "AL":
             for i, (input, target, hpred) in enumerate(train_dataloader):
-                result = self.predictAL(input.to(self.device), target, hpred)
+                result = self.predictAL(input.to(self.device), target, hpred).tolist()
                 if prediction_type == "target":
                     self.prebuild_predictions_al += result
                 elif prediction_type == "right":
                     target_prediction = []
                     for i in range(len(result)):
-                        gt = self.gt[self.gt["Image ID"] == hpred[i]]
+                        gt = self.gt[self.gt["Image ID"] == hpred[i]]["GT"].item()
                         if result[i] == 1:
-                            target_prediction = gt
+                            target_prediction.append(gt)
                         else:
                             sample_list = self.gt_values.copy()
-                            sample_list.remove(gt)
-                            target_prediction = random.sample(sample_list, k=1)
+                            sample_list = np.delete(sample_list, np.where(sample_list == gt))
+                            target_prediction.append(random.sample(list(sample_list), k=1)[0])
                     self.prebuild_predictions_al += target_prediction
                     
                 self.prebuild_filenames_al += hpred
+                
+        print("DELETE ME")
+        print("Init predictions")
+        print(self.prebuild_predictions_al)
+        print(self.prebuild_predictions_ssl)
     
     def predict_model_predefined(self, img, target, filenames, mod):
         if mod == "SSL":
@@ -179,7 +184,7 @@ class Expert:
     Old functions, here for compatibility and wraped from the new functions
     """
         
-    def predictWithModel(self, img, target, filename, prediction_type):
+    def predictWithModel(self, img, target, filename):
         """
         Checks with the model if the expert would be correct
         If it predicts 1 than it returns the true label
@@ -189,13 +194,13 @@ class Expert:
         #if prediction_type == "target":
         #    return redicted
         #elif prediction_type == "right"
-        result = []
-        target = target.cpu().detach().numpy()
-        for i, pred in enumerate(predicted):
-            if pred == 1:
-                result.append(target[i])
-            else:
-                result.append(1 - target[i])
+        #result = []
+        #target = target.cpu().detach().numpy()
+        #for i, pred in enumerate(predicted):
+        #    if pred == 1:
+        #        result.append(target[i])
+        #    else:
+        #        result.append(1 - target[i])
         #return result
         return predicted
 
