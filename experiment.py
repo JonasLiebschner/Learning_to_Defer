@@ -1189,20 +1189,34 @@ def get_labeled_images_df(labeled_filenames):
 #CUDA_LAUNCH_BLOCKING=1
 #torch.backends.cudnn.benchmark = True
 
+def build_param_from_json(data, path, num_worker):
+    param = data.copy()
+    param["Parent_PATH"] = path
+    param["PATH"] = f{path}/{data["PATH"]}
+    param["ckp_dir"] = f{path}/{data["ckp_dir"]}
+    param["num_worker"] = num_worker
+    return param
 
 # In[ ]:
 def main(args):
 
-    path = args[0]
+    path = args[1]
+
+    param_file = args[0]
 
     num_worker = 4
-    if len(args) >= 2:
-        num_worker = int(args[1])
+    if len(args) >= 3:
+        num_worker = int(args[2])
 
     if "liebschner" not in path and "joli" not in path:
         return
 
-    param = {
+    with open(param_file, 'r') as f:
+        param = json.load(f)
+
+    param = build_param_from_json(param, path, num_worker)
+
+    """param = {
         "DATASET": "CIFAR100",
         "PATH": f"{path}/Datasets/",
         "Parent_PATH": path,
@@ -1329,7 +1343,7 @@ def main(args):
         "num_worker": num_worker,
         "cluster": True,
         "IMAGE_SIZE": 128,
-    }
+    }"""
 
     expert_metrics_all = run_experiment(param)
 
