@@ -1,13 +1,17 @@
 import os
 import json
 import argparse
+import hashlib
 
-from src.CIFAR100_Expert import CIFAR100_Expert
-import src.preprocess_data as prep
+from Dataset.CIFAR100.Synthetic_CIFAR_Expert.src.CIFAR100_Expert import CIFAR100_Expert
+import Dataset.CIFAR100.Synthetic_CIFAR_Expert.src.preprocess_data as prep
 
 
 def generate_synthetic_expert(strength=60, binary=False, num_classes=20, per_s=1.0, per_w=0.0, seed=42, path="./", name=None):
 
+    if path[-1] != "/":
+            path = path + "/"
+        
     args = {
         "strength": strength,
         "binary": binary,
@@ -20,19 +24,19 @@ def generate_synthetic_expert(strength=60, binary=False, num_classes=20, per_s=1
     path_name = expert_to_path(name, args, seed)
 
     # generate expert of strength X
-    expert = CIFAR100_Expert(args.num_classes, args.strength, args.per_s, args.per_w, seed=path_name, name=name)
+    expert = CIFAR100_Expert(args["num_classes"], args["strength"], args["per_s"], args["per_w"], seed=path_name, name=name, path=path)
 
     train_data, test_data = prep.get_train_test_data()
 
-    true_ex_labels = {'train': expert.generate_expert_labels(train_data.targets, binary=args.binary).tolist(),
-                      'test': expert.generate_expert_labels(test_data.targets, binary=args.binary).tolist()}
+    true_ex_labels = {'train': expert.generate_expert_labels(train_data.targets, binary=args["binary"]).tolist(),
+                      'test': expert.generate_expert_labels(test_data.targets, binary=args["binary"]).tolist()}
 
     os.makedirs(f'{path}/synthetic_experts/{path_name}', exist_ok=True)
-    with open(f'{path}/synthetic_experts/{path_name}/cifar100_expert_{args.strength}_labels.json', 'w') as f:
+    with open(f'{path}/synthetic_experts/{path_name}/cifar100_expert_{args["strength"]}_labels.json', 'w') as f:
         json.dump(true_ex_labels, f)
 
     args["name"] = name
-    with open(f'{path}synthetic_experts/{path_name}/cifar100_expert_params.json', 'w') as f:
+    with open(f'{path}/synthetic_experts/{path_name}/cifar100_expert_params.json', 'w') as f:
         json.dump(args, f)
 
     return true_ex_labels

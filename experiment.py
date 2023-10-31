@@ -61,6 +61,7 @@ import glob
 
 import Dataset.cifar10_dataset as cif
 import Dataset.vin_dataset as vin
+import Dataset.CIFAR100.cifar100_dataset as cif100
 
 
 def set_seed(seed, fold=None, text=None):
@@ -109,6 +110,10 @@ def getExpertModelSSL_AL(dataManager, expert, labelerId, param=None, seed=None, 
         train_dataset = vin.VINDataset(expert_train, preload=False, preprocess=False, param=param, image_container=image_container)
         val_dataset = vin.VINDataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
         test_dataset = vin.VINDataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
+    elif param["DATASET"] == "CIFAR100":
+        train_dataset = cif100.CIFAR100Dataset(expert_train, preload=False, preprocess=False, param=param, image_container=image_container)
+        val_dataset = cif100.CIFAR100Dataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
+        test_dataset = cif100.CIFAR100Dataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
 
     sslDataset = dataManager.getSSLDataset(seed)
     usedFilenames = sslDataset.getLabeledFilenames(labelerId, fold)
@@ -240,6 +245,10 @@ def getExpertModelsSSL_AL(dataManager, experts, param, seed, fold, learning_mod=
         train_dataset = vin.VINDataset(expert_train, preload=False, preprocess=False, param=param, image_container=image_container)
         val_dataset = vin.VINDataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
         test_dataset = vin.VINDataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
+    elif param["DATASET"] == "CIFAR100":
+        train_dataset = cif100.CIFAR100Dataset(expert_train, preload=False, preprocess=False, param=param, image_container=image_container)
+        val_dataset = cif100.CIFAR100Dataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
+        test_dataset = cif100.CIFAR100Dataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
 
     sslDataset = dataManager.getSSLDataset(seed)
     usedFilenames = []
@@ -435,6 +444,9 @@ def getExpertsSSL(dataManager, param, fold, seed):
     elif param["DATASET"] == "VIN":
         val_dataset = vin.VINDataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
         test_dataset = vin.VINDataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
+    elif param["DATASET"] == "CIFAR100":
+        val_dataset = cif100.CIFAR100Dataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
+        test_dataset = cif100.CIFAR100Dataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
 
     metrics = {}
     for labelerId, expert in experts.items():
@@ -491,6 +503,10 @@ def getExpertsAL(dataManager, param, fold_idx, seed):
         expert_train_dataset = vin.VINDataset(expert_train, preload=False, preprocess=False, param=param, image_container=image_container)
         expert_val_dataset = vin.VINDataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
         expert_test_dataset = vin.VINDataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
+    elif param["DATASET"] == "CIFAR100":
+        expert_train_dataset = cif100.CIFAR100Dataset(expert_train, preload=False, preprocess=False, param=param, image_container=image_container)
+        expert_val_dataset = cif100.CIFAR100Dataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
+        expert_test_dataset = cif100.CIFAR100Dataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
     
     setupEmbeddedModel(dataManager, param, fold_idx, seed)
     #Get init labeled indices with k same images and n-k different images
@@ -558,6 +574,10 @@ def getExpertsNormal(dataManager, param, fold_idx, seed):
         expert_train_dataset = vin.VINDataset(expert_train, preload=False, preprocess=False, param=param, image_container=image_container)
         expert_val_dataset = vin.VINDataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
         expert_test_dataset = vin.VINDataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
+    elif param["DATASET"] == "CIFAR100":
+        expert_train_dataset = cif100.CIFAR100Dataset(expert_train, preload=False, preprocess=False, param=param, image_container=image_container)
+        expert_val_dataset = cif100.CIFAR100Dataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
+        expert_test_dataset = cif100.CIFAR100Dataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
 
     setupEmbeddedModel(dataManager, param, fold_idx, seed)
     
@@ -626,6 +646,9 @@ def getExpertsPerfect(dataManager, param, fold, seed):
     elif param["DATASET"] == "VIN":
         val_dataset = vin.VINDataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
         test_dataset = vin.VINDataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
+    elif param["DATASET"] == "CIFAR100":
+        val_dataset = cif100.CIFAR100Dataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
+        test_dataset = cif100.CIFAR100Dataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
 
     metrics = {}
     for labelerId, expert in experts.items():
@@ -749,7 +772,7 @@ def one_run(dataManager, run_param, all_metrics, print_text, run_metrics, count,
 
         #Iterate over the folds
         #for fold_idx in range(run_param["K"]):
-        for fold_idx in range(3):
+        for fold_idx in range(1):
 
             #Check if the seed-fold combination is already in the save files
             if fold_idx in expert_metrics[seed].keys():
@@ -914,6 +937,8 @@ def run_experiment(param):
             dataManager = cif.CIFAR10NDataManager(path=param["PATH"], path_labels=f'{param["PATH"]}{param["DATASET"]}', path_data=f'{param["PATH"]}/{param["DATASET"]}', param=run_param, seeds=param["SEEDS"])
         elif param["DATASET"] == "VIN":
             dataManager = vin.VINDataManager(path=param["PATH"], target=param["TARGET"], param=run_param, seeds=param["SEEDS"])
+        elif param["DATASET"] == "CIFAR100":
+            dataManager = cif100.CIFAR100DataManager(path=param["PATH"], path_labels=f'{param["PATH"]}{param["DATASET"]}', path_data=f'{param["PATH"]}/{param["DATASET"]}', param=run_param, seeds=param["SEEDS"])
         dataManager.createData()
 
         run_param["DATASET"] = param["DATASET"]
@@ -1164,26 +1189,40 @@ def get_labeled_images_df(labeled_filenames):
 #CUDA_LAUNCH_BLOCKING=1
 #torch.backends.cudnn.benchmark = True
 
+def build_param_from_json(data, path, num_worker):
+    param = data.copy()
+    param["Parent_PATH"] = path
+    param["PATH"] = f{path}/{data["PATH"]}
+    param["ckp_dir"] = f{path}/{data["ckp_dir"]}
+    param["num_worker"] = num_worker
+    return param
 
 # In[ ]:
 def main(args):
 
-    path = args[0]
+    path = args[1]
+
+    param_file = args[0]
 
     num_worker = 4
-    if len(args) >= 2:
-        num_worker = int(args[1])
+    if len(args) >= 3:
+        num_worker = int(args[2])
 
     if "liebschner" not in path and "joli" not in path:
         return
 
-    param = {
-        "DATASET": "CIFAR10N",
+    with open(param_file, 'r') as f:
+        param = json.load(f)
+
+    param = build_param_from_json(param, path, num_worker)
+
+    """param = {
+        "DATASET": "CIFAR100",
         "PATH": f"{path}/Datasets/",
         "Parent_PATH": path,
         "TARGET": "Airspace_Opacity",
         #"LABELER_IDS": [[4323195249, 4295232296], [4295349121, 4295342357], [4295342357, 4295354117]],
-        "LABELER_IDS": [[1, 2]],
+        "LABELER_IDS": [[123, 456]],
         "K": 10, #Number of folds
         #"SEEDS": [1, 2, 3, 4], #Seeds for the experiments
         "SEEDS": [1], #Seeds for the experiments
@@ -1261,6 +1300,26 @@ def main(args):
             },
             "EPOCHS": 30,
         },
+
+        "CIFAR100": {
+            "EXPERTS": {
+                "123": {
+                    "strength": 60,
+                    "binary": False,
+                    "num_classes": 20,
+                    "per_s": 1.0,
+                    "per_w": 0.0
+                },
+                "456": {
+                    "strength": 60,
+                    "binary": False,
+                    "num_classes": 20,
+                    "per_s": 1.0,
+                    "per_w": 0.0
+                }
+            },
+        },
+        
     
     
         "epochs_pretrain": [0],
@@ -1284,7 +1343,7 @@ def main(args):
         "num_worker": num_worker,
         "cluster": True,
         "IMAGE_SIZE": 128,
-    }
+    }"""
 
     expert_metrics_all = run_experiment(param)
 
@@ -1325,6 +1384,17 @@ def build_param(param):
         elif param["EXPERT_PREDICT"] == "target":
             param["NUM_CLASSES"] = 10
             param["n_classes"] = 10
+            pass
+    elif param["DATASET"] == "CIFAR100":
+        param["SSL"]["N_IMGS_PER_EPOCH"] = 800 # Anpassen
+        param["IMAGE_SIZE"] = 32
+        param["EMBEDDED"]["ARGS"]["num_classes"] = 100
+        if param["EXPERT_PREDICT"] == "right":
+            param["NUM_CLASSES"] = 2
+            param["n_classes"] = 2
+        elif param["EXPERT_PREDICT"] == "target":
+            param["NUM_CLASSES"] = 100
+            param["n_classes"] = 100
             pass
     return param
 

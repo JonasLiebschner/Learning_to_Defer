@@ -938,13 +938,14 @@ class SSLDataset(SSLDataset):
     def get_train_loader_interface(self, expert, batch_size, mu, n_iters_per_epoch, L, method='comatch', imsize=(128, 128), fold_idx=0, pin_memory=False):
         labeler_id = expert.labeler_id
         
-        data_x, label_x, data_u, label_u = self.getTrainDataset(labeler_id, fold_idx)
+        data_x, label_x, gt_x, data_u, label_u, gt_u = self.getTrainDataset(labeler_id, fold_idx)
         
         #print(f'Label check: {Counter(label_x)}')
         print("Labels: " + str(len(label_x)))
         ds_x = NIH_SSL_Dataset(
             data=data_x,
             labels=label_x,
+            gt=gt_x,
             mode='train_x',
             image_container=self.imageContainer,
             imsize=imsize
@@ -964,6 +965,7 @@ class SSLDataset(SSLDataset):
             ds_u = NIH_SSL_Dataset(
                 data=data_u,
                 labels=label_u,
+                gt=gt_u,
                 mode='train_u_%s'%method,
                 image_container=self.imageContainer,
                 imsize=imsize
@@ -991,11 +993,12 @@ class SSLDataset(SSLDataset):
         :return: Dataloader
         """
         labeler_id = expert.labeler_id
-        data, labels = self.getValDataset(labeler_id, fold_idx)
+        data, labels, gt = self.getValDataset(labeler_id, fold_idx)
 
         ds = NIH_SSL_Dataset(
             data=data,
             labels=labels,
+            gt=gt,
             mode='val',
             imsize=imsize,
             image_container=self.imageContainer
@@ -1022,11 +1025,12 @@ class SSLDataset(SSLDataset):
         :return: Dataloader
         """
         labeler_id = expert.labeler_id
-        data, labels = self.getTestDataset(labeler_id, fold_idx)
+        data, labels, gt = self.getTestDataset(labeler_id, fold_idx)
 
         ds = NIH_SSL_Dataset(
             data=data,
             labels=labels,
+            gt=gt,
             mode='test',
             imsize=imsize,
             image_container=self.imageContainer
@@ -1104,9 +1108,10 @@ class NIH_SSL_Dataset(SSL_Dataset):
     :ivar labels: Labels
     :ivar mode: Mode
     """
-    def __init__(self, data, labels, mode, image_container=None, imsize=(128, 128)) -> None:
+    def __init__(self, data, labels, gt, mode, image_container=None, imsize=(128, 128)) -> None:
         self.image_ids = data
         self.labels = labels
+        self.gt = gt
         self.mode = mode
         self.image_container = image_container
 
@@ -1186,7 +1191,7 @@ class NIH_SSL_Dataset(SSL_Dataset):
                     self.images.append(self.loadImage(idx))
 
     def __getitem__(self, index: int):
-        filename, label = self.image_ids[index], self.labels[index], self.gt[index]
+        filename, label, gt = self.image_ids[index], self.labels[index], self.gt[index]
         im = self.images[index]
         return self.trans(im), label, filename, gt
 

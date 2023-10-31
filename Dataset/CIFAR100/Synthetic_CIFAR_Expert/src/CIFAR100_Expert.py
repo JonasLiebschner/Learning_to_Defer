@@ -1,11 +1,14 @@
 import random
 import numpy as np
+import os
 
-from src.generate_probabilities import generate_error_probs
+from Dataset.CIFAR100.Synthetic_CIFAR_Expert.src.generate_probabilities import generate_error_probs
 
 
 class CIFAR100_Expert():
-    def __init__(self, num_classes, n_strengths, per_s, per_w, seed=123, name=None):
+    def __init__(self, num_classes, n_strengths, per_s, per_w, seed=123, name=None, path="./"):
+        if path[-1] != "/":
+            path = path + "/"
         self.num_classes = num_classes
         self.n_strengths = n_strengths
         self.per_s = per_s
@@ -20,11 +23,11 @@ class CIFAR100_Expert():
                                   79: 13, 80: 16, 81: 19, 82: 2, 83: 4, 84: 6, 85: 19, 86: 5, 87: 5, 88: 8, 89: 19,
                                   90: 18, 91: 1, 92: 2, 93: 15, 94: 6, 95: 0, 96: 17, 97: 8, 98: 14, 99: 13}
         try:
-            self.probs = np.load('data/mistake_probs.npy')
+            self.probs = np.load(f'{path}data/{name}/mistake_probs.npy')
         except FileNotFoundError:
             print('Probabilities not found -> generating probabilities')
-            generate_error_probs()
-            self.probs = np.load('data/mistake_probs.npy')
+            generate_error_probs(path, name)
+            self.probs = np.load(f'{path}data/{name}/mistake_probs.npy')
 
         self.seed = seed
         self.strengths_ind = self.draw_expert_strengths()
