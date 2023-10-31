@@ -937,24 +937,35 @@ def run_experiment(param):
         elif param["DATASET"] == "CIFAR100":
             dataManager = cif100.CIFAR100DataManager(path=param["PATH"], path_labels=f'{param["PATH"]}{param["DATASET"]}', path_data=f'{param["PATH"]}/{param["DATASET"]}', param=run_param, seeds=param["SEEDS"])
         dataManager.createData()
+        
+        print("DataManager created")
 
         run_param["DATASET"] = param["DATASET"]
 
         for init_size in param["AL"]["INITIAL_SIZE"]:
             run_param["AL"]["INITIAL_SIZE"] = init_size
+            
+            print("1")
 
             for labels_per_round in param["AL"]["LABELS_PER_ROUND"]:
                 run_param["AL"]["LABELS_PER_ROUND"] = labels_per_round
 
                 for rounds in param["AL"]["ROUNDS"]:
                     run_param["AL"]["ROUNDS"] = rounds
+                    
+                    print("2")
 
                     labeled = init_size + rounds * labels_per_round
+                    
+                    print(labeled)
 
                     run_param["LABELED"] = labeled
 
                     if (labeled >= 128): #Prevents from large amount of data
                         continue
+                        
+                    print("3")
+                    
 
                     for cost in param["AL"]["COST"]:
                         run_param["AL"]["COST"] = cost
@@ -968,8 +979,11 @@ def run_experiment(param):
                         
                                 for mod in param["MOD"]:
                                     run_param["MOD"] = mod
+                                    
+                                    print("Pos 4")
 
                                     if ((setting == "AL"  or setting=="SSL_AL" or setting=="SSL_AL_SSL") and (mod not in ["confidence", "disagreement", "disagreement_diff"])):
+                                        print("4.1")
                                         continue
 
                                     if (setting == "SSL" and mod != "ssl"):
@@ -983,6 +997,8 @@ def run_experiment(param):
 
                                         #if ((setting == "SSL" or setting == "SSL_AL" or setting == "SSL_AL_SSL") and (expert_predict == "right")):
                                         #    continue
+                                        
+                                        print("5")
 
                                         if (expert_predict == "target") and (cost != param["AL"]["COST"][0]):
                                             continue
@@ -994,8 +1010,12 @@ def run_experiment(param):
 
                                             for epochs_pretrain in param["epochs_pretrain"]:
                                                 run_param["epochs_pretrain"] = epochs_pretrain
+                                                
+                                                print("Inner loop")
 
                                                 run_param = build_param(run_param)
+                                                
+                                                print("Param build")
 
                                                 metrics_save = {}
                                                 metrics_save["labeler_ids"] = labeler_ids
@@ -1189,9 +1209,9 @@ def build_param_from_json(data, path, num_worker):
     param["PATH"] = f"{path}/{data['PATH']}"
     param["ckp_dir"] = f"{path}/{data['ckp_dir']}"
     param["num_worker"] = num_worker
-    param["AL"]["COST"] = []
-    for element in data["AL"]["COST"]:
-        param["AL"]["COST"].append((element[0], element[1]))
+    costs = [tuple(cost) for cost in data["AL"]["COST"]]
+    param["AL"]["COST"] = costs
+    print(f"Cost: {param['AL']['COST']}")
     return param
 
 # In[ ]:
@@ -1392,7 +1412,7 @@ def build_param(param):
         elif param["EXPERT_PREDICT"] == "target":
             param["NUM_CLASSES"] = 100
             param["n_classes"] = 100
-            pass
+            
     return param
 
 if __name__ == "__main__":
