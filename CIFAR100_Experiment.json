@@ -27,7 +27,7 @@
         "ROUNDS": [2, 4],
         "LABELS_PER_ROUND": [4, 8, 16],
         "EPOCHS_DEFER": 10,
-        "COST": [0, 0],
+        "COST": [[0, 0]],
         "PRELOAD": true,
         "PREPROCESS": true,
         "SSL_EPOCHS": 3
@@ -86,14 +86,14 @@
                 "num_classes": 20,
                 "per_s": 1.0,
                 "per_w": 0.0
-            }
+            },
             "60_3": {
                 "strength": 60,
                 "binary": false,
                 "num_classes": 20,
                 "per_s": 1.0,
                 "per_w": 0.0
-            }
+            },
             "60_4": {
                 "strength": 60,
                 "binary": false,
