@@ -772,7 +772,7 @@ def one_run(dataManager, run_param, all_metrics, print_text, run_metrics, count,
 
         #Iterate over the folds
         #for fold_idx in range(run_param["K"]):
-        for fold_idx in range(1):
+        for fold_idx in range(2):
 
             #Check if the seed-fold combination is already in the save files
             if fold_idx in expert_metrics[seed].keys():
@@ -887,9 +887,6 @@ def one_run(dataManager, run_param, all_metrics, print_text, run_metrics, count,
                 all_metrics[-1] = run_metrics
             with open(f'{run_param["Parent_PATH"]}/Metrics_Folder/{run_param["DATASET"]}/Metrics_{temp_count}.pickle', 'wb') as handle:
                 pickle.dump(all_metrics, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-            #DELETE ME
-            return expert_metrics, verma_metrics, hemmer_metrics, metrics_added, labeled_dfs
 
 
     return expert_metrics, verma_metrics, hemmer_metrics, metrics_added, labeled_dfs
@@ -1055,12 +1052,9 @@ def run_experiment(param):
                                                 """
 
                                                 start_time = time.time()
-                                                #dataManager, run_param, all_metrics, print_text, run_metrics, count, current_index=None
+
                                                 expert_metrics, verma_metrics, hemmer_metrics, metrics_added, labeled_dfs = one_run(dataManager, run_param, expert_metrics_all.copy(), print_text, metrics_save, count, current_index)
 
-                                                print("DELETE ME")
-                                                return
-                                                #return one_run(dataManager, run_param, expert_metrics_all.copy(), print_text, metrics_save, count, current_index)
                                                 
                                                 print("--- %s seconds ---" % (time.time() - start_time))
 
@@ -1192,21 +1186,24 @@ def get_labeled_images_df(labeled_filenames):
 def build_param_from_json(data, path, num_worker):
     param = data.copy()
     param["Parent_PATH"] = path
-    param["PATH"] = f{path}/{data["PATH"]}
-    param["ckp_dir"] = f{path}/{data["ckp_dir"]}
+    param["PATH"] = f"{path}/{data['PATH']}"
+    param["ckp_dir"] = f"{path}/{data['ckp_dir']}"
     param["num_worker"] = num_worker
+    param["AL"]["COST"] = []
+    for element in data["AL"]["COST"]:
+        param["AL"]["COST"].append((element[0], element[1]))
     return param
 
 # In[ ]:
 def main(args):
 
-    path = args[1]
+    path = args[0]
 
-    param_file = args[0]
+    param_file = args[2]
 
     num_worker = 4
-    if len(args) >= 3:
-        num_worker = int(args[2])
+    if len(args) >= 2:
+        num_worker = int(args[1])
 
     if "liebschner" not in path and "joli" not in path:
         return
