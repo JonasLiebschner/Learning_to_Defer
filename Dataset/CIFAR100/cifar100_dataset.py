@@ -560,6 +560,7 @@ class CIFAR100SSLDataset(dsc.SSLDataset):
         self.basicDataset = dataset
         self.kFoldDataloader = kFoldDataloader
         self.imageContainer = imageContainer
+        print(f"SSL LabelerIds {labeler_ids}")
         self.labeler_ids = labeler_ids
         self.param = param
         self.seed = seed
