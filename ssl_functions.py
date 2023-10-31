@@ -41,7 +41,7 @@ def create_embedded_model(dataloaders, param, neptune_param, fold, seed):
     neptune_param = neptune_param
 
     #wkdir = os.getcwd() + "/SSL_Working"
-    wkdir = param["Parent_PATH"] + "/SSL_Working"
+    wkdir = param["Parent_PATH"] + "/SSL_Working/"# + param["DATASET"]
     
     sys.path.append(wkdir)
 
@@ -220,11 +220,22 @@ def train_one_epoch(epoch,
     epoch_start = time.time()  # start time
     dl_x, dl_u = iter(dltrain_x), iter(dltrain_u)
     for it in range(n_iters):
-        ims_x_weak, lbs_x, im_id = next(dl_x)
-        (ims_u_weak, ims_u_strong0, ims_u_strong1), lbs_u_real, im_id = next(dl_u)
+        ims_x_weak, lbs_x, im_id, gt_x = next(dl_x) #transformed image, expert label, filename, gt_labels
+        (ims_u_weak, ims_u_strong0, ims_u_strong1), lbs_u_real, im_id, gt_u = next(dl_u) #transformed images, expert label, filename, gt_labels
 
         lbs_x = lbs_x.type(torch.LongTensor).cuda()
+        gt_x = gt_x.type(torch.LongTensor).cuda()
+
         lbs_u_real = lbs_u_real.cuda()
+        gt_u = gt_u.cuda()
+
+        if args["expert_predict"] == "right":
+            # Compare human expert labels with ground truth labels
+            correct_predictions = torch.eq(lbs_x, gt_x).type(torch.LongTensor).cuda()
+            lbs_x = correct_predictions
+
+            correct_predictions = torch.eq(lbs_u_real, gt_u).type(torch.LongTensor).cuda()
+            lbs_u_real = correct_predictions
 
         # --------------------------------------
         bt = ims_x_weak.size(0)
@@ -379,7 +390,7 @@ def train_one_epoch(epoch,
     return loss_x_meter.avg, loss_u_meter.avg, loss_contrast_meter.avg, mask_meter.avg, pos_meter.avg, n_correct_u_lbs_meter.avg/n_strong_aug_meter.avg, queue_feats, queue_probs, queue_ptr, prob_list
 
 
-def evaluate(model, ema_model, emb_model, dataloader):
+def evaluate(model, ema_model, emb_model, dataloader, param):
     """Evaluate model on train or validation set
 
     :param model: Model
@@ -398,9 +409,14 @@ def evaluate(model, ema_model, emb_model, dataloader):
     ema_top1_meter = AverageMeter()
 
     with torch.no_grad():
-        for ims, lbs, im_id in dataloader:
+        for ims, lbs, im_id, gt in dataloader:
             ims = ims.cuda()
             lbs = lbs.cuda()
+            gt = gt.cuda()
+
+            if param["EXPERT_PREDICT"] == "right":
+                correct_predictions = torch.eq(lbs, gt).type(torch.LongTensor).cuda()
+                lbs = correct_predictions
 
             embedding = emb_model.get_embedding(batch=ims)
             logits, _ = model(embedding)
@@ -482,9 +498,12 @@ def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded
     elif param["EMBEDDED"]["ARGS"]["model"] == "resnet50":
         args["type"] = "50"
     path = param["PATH"]
+    args["n_classes"] = param["n_classes"]
+
+    args["expert_predict"] = param["EXPERT_PREDICT"]
 
     #Setzt Logger fest
-    out_path = f"{param['Parent_PATH']}/SSL_Working/SSL/"
+    out_path = f"{param['Parent_PATH']}/SSL_Working/{param['DATASET']}/SSL/"
         
     logger, output_dir = setup_default_logging(out_path, args)
     logger.info(dict(args))
@@ -581,7 +600,7 @@ def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded
         loss_x, loss_u, loss_c, mask_mean, num_pos, guess_label_acc, queue_feats, queue_probs, queue_ptr, prob_list = \
         train_one_epoch(epoch, **train_args, queue_feats=queue_feats,queue_probs=queue_probs,queue_ptr=queue_ptr)
 
-        top1, ema_top1 = evaluate(model, ema_model, emb_model, dlval)
+        top1, ema_top1 = evaluate(model, ema_model, emb_model, dlval, param)
 
 
         tb_logger.add_scalar('loss_x', loss_x, epoch)
@@ -616,7 +635,7 @@ def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded
             'epoch': epoch,
         }
         torch.save(save_obj, os.path.join(output_dir, 'ckp.latest'))
-    _, _ = evaluate(model, ema_model, emb_model, dlval)
-    _, _ = evaluate(model, ema_model, emb_model, dtest)
+    _, _ = evaluate(model, ema_model, emb_model, dlval, param)
+    _, _ = evaluate(model, ema_model, emb_model, dtest, param)
 
     return emb_model, model

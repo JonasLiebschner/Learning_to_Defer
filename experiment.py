@@ -59,8 +59,9 @@ import shutil
 
 import glob
 
-
-# In[2]:
+import Dataset.cifar10_dataset as cif
+import Dataset.vin_dataset as vin
+import Dataset.CIFAR100.cifar100_dataset as cif100
 
 
 def set_seed(seed, fold=None, text=None):
@@ -96,9 +97,23 @@ def getExpertModelSSL_AL(dataManager, expert, labelerId, param=None, seed=None, 
 
     expert_train, expert_val, expert_test = nih_dataloader.get_dataset_for_folder(fold)
     image_container = nih_dataloader.get_ImageContainer()
-    train_dataset = ds.NIHDataset(expert_train, preload=False, preprocess=False, param=param, image_container=image_container)
-    val_dataset = ds.NIHDataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
-    test_dataset = ds.NIHDataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
+
+    if param["DATASET"] == "NIH":
+        train_dataset = ds.NIHDataset(expert_train, preload=False, preprocess=False, param=param, image_container=image_container)
+        val_dataset = ds.NIHDataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
+        test_dataset = ds.NIHDataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
+    elif param["DATASET"] == "CIFAR10N":
+        train_dataset = cif.CIFAR10NDataset(expert_train, preload=False, preprocess=False, param=param, image_container=image_container)
+        val_dataset = cif.CIFAR10NDataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
+        test_dataset = cif.CIFAR10NDataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
+    elif param["DATASET"] == "VIN":
+        train_dataset = vin.VINDataset(expert_train, preload=False, preprocess=False, param=param, image_container=image_container)
+        val_dataset = vin.VINDataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
+        test_dataset = vin.VINDataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
+    elif param["DATASET"] == "CIFAR100":
+        train_dataset = cif100.CIFAR100Dataset(expert_train, preload=False, preprocess=False, param=param, image_container=image_container)
+        val_dataset = cif100.CIFAR100Dataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
+        test_dataset = cif100.CIFAR100Dataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
 
     sslDataset = dataManager.getSSLDataset(seed)
     usedFilenames = sslDataset.getLabeledFilenames(labelerId, fold)
@@ -217,9 +232,23 @@ def getExpertModelsSSL_AL(dataManager, experts, param, seed, fold, learning_mod=
 
     expert_train, expert_val, expert_test = nih_dataloader.get_dataset_for_folder(fold)
     image_container = nih_dataloader.get_ImageContainer()
-    train_dataset = ds.NIHDataset(expert_train, preload=False, preprocess=False, param=param, image_container=image_container)
-    val_dataset = ds.NIHDataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
-    test_dataset = ds.NIHDataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
+
+    if param["DATASET"] == "NIH":
+        train_dataset = ds.NIHDataset(expert_train, preload=False, preprocess=False, param=param, image_container=image_container)
+        val_dataset = ds.NIHDataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
+        test_dataset = ds.NIHDataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
+    elif param["DATASET"] == "CIFAR10N":
+        train_dataset = cif.CIFAR10NDataset(expert_train, preload=False, preprocess=False, param=param, image_container=image_container)
+        val_dataset = cif.CIFAR10NDataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
+        test_dataset = cif.CIFAR10NDataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
+    elif param["DATASET"] == "VIN":
+        train_dataset = vin.VINDataset(expert_train, preload=False, preprocess=False, param=param, image_container=image_container)
+        val_dataset = vin.VINDataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
+        test_dataset = vin.VINDataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
+    elif param["DATASET"] == "CIFAR100":
+        train_dataset = cif100.CIFAR100Dataset(expert_train, preload=False, preprocess=False, param=param, image_container=image_container)
+        val_dataset = cif100.CIFAR100Dataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
+        test_dataset = cif100.CIFAR100Dataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
 
     sslDataset = dataManager.getSSLDataset(seed)
     usedFilenames = []
@@ -406,8 +435,18 @@ def getExpertsSSL(dataManager, param, fold, seed):
     expert_train, expert_val, expert_test = nih_dataloader.get_dataset_for_folder(fold)
     image_container = nih_dataloader.get_ImageContainer()
 
-    val_dataset = ds.NIHDataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
-    test_dataset = ds.NIHDataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
+    if param["DATASET"] == "NIH":
+        val_dataset = ds.NIHDataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
+        test_dataset = ds.NIHDataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
+    elif param["DATASET"] == "CIFAR10N":
+        val_dataset = cif.CIFAR10NDataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
+        test_dataset = cif.CIFAR10NDataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
+    elif param["DATASET"] == "VIN":
+        val_dataset = vin.VINDataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
+        test_dataset = vin.VINDataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
+    elif param["DATASET"] == "CIFAR100":
+        val_dataset = cif100.CIFAR100Dataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
+        test_dataset = cif100.CIFAR100Dataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
 
     metrics = {}
     for labelerId, expert in experts.items():
@@ -451,10 +490,24 @@ def getExpertsAL(dataManager, param, fold_idx, seed):
     nih_dataloader = dataManager.getKFoldDataloader(seed)
     expert_train, expert_val, expert_test = nih_dataloader.get_dataset_for_folder(fold_idx)
     image_container = nih_dataloader.get_ImageContainer()
-    expert_train_dataset = ds.NIHDataset(expert_train, preload=False, preprocess=False, param=param, image_container=image_container)
-    expert_val_dataset = ds.NIHDataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
-    expert_test_dataset = ds.NIHDataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
 
+    if param["DATASET"] == "NIH":
+        expert_train_dataset = ds.NIHDataset(expert_train, preload=False, preprocess=False, param=param, image_container=image_container)
+        expert_val_dataset = ds.NIHDataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
+        expert_test_dataset = ds.NIHDataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
+    elif param["DATASET"] == "CIFAR10N":
+        expert_train_dataset = cif.CIFAR10NDataset(expert_train, preload=False, preprocess=False, param=param, image_container=image_container)
+        expert_val_dataset = cif.CIFAR10NDataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
+        expert_test_dataset = cif.CIFAR10NDataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
+    elif param["DATASET"] == "VIN":
+        expert_train_dataset = vin.VINDataset(expert_train, preload=False, preprocess=False, param=param, image_container=image_container)
+        expert_val_dataset = vin.VINDataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
+        expert_test_dataset = vin.VINDataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
+    elif param["DATASET"] == "CIFAR100":
+        expert_train_dataset = cif100.CIFAR100Dataset(expert_train, preload=False, preprocess=False, param=param, image_container=image_container)
+        expert_val_dataset = cif100.CIFAR100Dataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
+        expert_test_dataset = cif100.CIFAR100Dataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
+    
     setupEmbeddedModel(dataManager, param, fold_idx, seed)
     #Get init labeled indices with k same images and n-k different images
     #k=None means random indieces
@@ -508,9 +561,23 @@ def getExpertsNormal(dataManager, param, fold_idx, seed):
     nih_dataloader = dataManager.getKFoldDataloader(seed)
     expert_train, expert_val, expert_test = nih_dataloader.get_dataset_for_folder(fold_idx)
     image_container = nih_dataloader.get_ImageContainer()
-    expert_train_dataset = ds.NIHDataset(expert_train, preload=False, preprocess=False, param=param, image_container=image_container)
-    expert_val_dataset = ds.NIHDataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
-    expert_test_dataset = ds.NIHDataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
+
+    if param["DATASET"] == "NIH":
+        expert_train_dataset = ds.NIHDataset(expert_train, preload=False, preprocess=False, param=param, image_container=image_container)
+        expert_val_dataset = ds.NIHDataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
+        expert_test_dataset = ds.NIHDataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
+    elif param["DATASET"] == "CIFAR10N":
+        expert_train_dataset = cif.CIFAR10NDataset(expert_train, preload=False, preprocess=False, param=param, image_container=image_container)
+        expert_val_dataset = cif.CIFAR10NDataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
+        expert_test_dataset = cif.CIFAR10NDataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
+    elif param["DATASET"] == "VIN":
+        expert_train_dataset = vin.VINDataset(expert_train, preload=False, preprocess=False, param=param, image_container=image_container)
+        expert_val_dataset = vin.VINDataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
+        expert_test_dataset = vin.VINDataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
+    elif param["DATASET"] == "CIFAR100":
+        expert_train_dataset = cif100.CIFAR100Dataset(expert_train, preload=False, preprocess=False, param=param, image_container=image_container)
+        expert_val_dataset = cif100.CIFAR100Dataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
+        expert_test_dataset = cif100.CIFAR100Dataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
 
     setupEmbeddedModel(dataManager, param, fold_idx, seed)
     
@@ -538,7 +605,7 @@ def getExpertsNormal(dataManager, param, fold_idx, seed):
     for i, labelerId in enumerate(list(param["LABELER_IDS"])):
         nih_expert = expert_module.Expert(dataset = dataManager.getBasicDataset(), labeler_id=labelerId, modus="normal")
         experts[labelerId] = nih_expert
-        labeld_filenames[labelerId] = np.array(expert_train_dataset.getAllFilenames())[indices[labelerId]]
+        labeled_filenames[labelerId] = np.array(expert_train_dataset.getAllFilenames())[indices[labelerId]]
 
         model, met, metric = al.getExpertModelNormal(indices[labelerId], expert_train_dataset, expert_val_dataset, expert_test_dataset, nih_expert, param, seed, fold_idx, image_container=image_container, learning_mod="al", prediction_type=param["EXPERT_PREDICT"])
         nih_expert.setModel(model, mod="AL")
@@ -570,8 +637,18 @@ def getExpertsPerfect(dataManager, param, fold, seed):
     expert_train, expert_val, expert_test = nih_dataloader.get_dataset_for_folder(fold)
     image_container = nih_dataloader.get_ImageContainer()
 
-    val_dataset = ds.NIHDataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
-    test_dataset = ds.NIHDataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
+    if param["DATASET"] == "NIH":
+        val_dataset = ds.NIHDataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
+        test_dataset = ds.NIHDataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
+    elif param["DATASET"] == "CIFAR10N":
+        val_dataset = cif.CIFAR10NDataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
+        test_dataset = cif.CIFAR10NDataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
+    elif param["DATASET"] == "VIN":
+        val_dataset = vin.VINDataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
+        test_dataset = vin.VINDataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
+    elif param["DATASET"] == "CIFAR100":
+        val_dataset = cif100.CIFAR100Dataset(expert_val, preload=False, preprocess=False, param=param, image_container=image_container)
+        test_dataset = cif100.CIFAR100Dataset(expert_test, preload=False, preprocess=False, param=param, image_container=image_container)
 
     metrics = {}
     for labelerId, expert in experts.items():
@@ -657,6 +734,8 @@ def one_run(dataManager, run_param, all_metrics, print_text, run_metrics, count,
     verma_metrics = {}
     hemmer_metrics = {}
     
+    labeled_dfs = {}
+    
     metrics_added = False
 
     #Checks if there is data for this run in the save files
@@ -669,6 +748,12 @@ def one_run(dataManager, run_param, all_metrics, print_text, run_metrics, count,
         expert_metrics = current_metric["expert metrics"]
         verma_metrics = current_metric["verma"]
         hemmer_metrics = current_metric["hemmer"]
+        
+        if "artificial expert predictions" in current_metric.keys():
+            labeled_dfs = current_metric["artificial expert predictions"]
+            print(type(labeled_dfs))
+        else:
+            print(current_metric.keys())
     #If not, create new element in list of all metrics
     else:
         all_metrics.append(run_metrics)
@@ -683,10 +768,11 @@ def one_run(dataManager, run_param, all_metrics, print_text, run_metrics, count,
             expert_metrics[seed] = {}
             verma_metrics[seed] = {}
             hemmer_metrics[seed] = {}
+            labeled_dfs[seed] = {}
 
         #Iterate over the folds
         #for fold_idx in range(run_param["K"]):
-        for fold_idx in range(3):
+        for fold_idx in range(2):
 
             #Check if the seed-fold combination is already in the save files
             if fold_idx in expert_metrics[seed].keys():
@@ -703,11 +789,11 @@ def one_run(dataManager, run_param, all_metrics, print_text, run_metrics, count,
 
             
             if run_param["cluster"]: #Keep the embedded model in cluster training
-                if os.path.isdir(f'{run_param["Parent_PATH"]}/SSL_Working/SSL'):
-                    cleanTrainDir(f'{run_param["Parent_PATH"]}/SSL_Working/SSL')
+                if os.path.isdir(f'{run_param["Parent_PATH"]}/SSL_Working/{run_param["DATASET"]}/SSL'):
+                    cleanTrainDir(f'{run_param["Parent_PATH"]}/SSL_Working/{run_param["DATASET"]}/SSL')
             else: #delete everything if space is limited
-                if os.path.isdir(f'{run_param["Parent_PATH"]}/SSL_Working'):
-                    cleanTrainDir(f'{run_param["Parent_PATH"]}/SSL_Working')
+                if os.path.isdir(f'{run_param["Parent_PATH"]}/SSL_Working/{run_param["DATASET"]}'):
+                    cleanTrainDir(f'{run_param["Parent_PATH"]}/SSL_Working/{run_param["DATASET"]}')
 
             if seed != "":
                 set_seed(seed, fold_idx, text="")
@@ -743,16 +829,16 @@ def one_run(dataManager, run_param, all_metrics, print_text, run_metrics, count,
             print(run_param["SETTING"])
             for labelerId, expert in experts.items():
                 if run_param["SETTING"] == "AL":
-                    expert.init_model_predictions(full_dataloader, mod="AL")
+                    expert.init_model_predictions(full_dataloader, mod="AL", prediction_type=run_param["EXPERT_PREDICT"])
                     expert_fns.append(expert.predict_model_predefined_al)
                 elif run_param["SETTING"] == "SSL":
-                    expert.init_model_predictions(full_dataloader, mod="SSL")
+                    expert.init_model_predictions(full_dataloader, mod="SSL", prediction_type=run_param["EXPERT_PREDICT"])
                     expert_fns.append(expert.predict_model_predefined_ssl)
                 elif (run_param["SETTING"] == "SSL_AL" or run_param["SETTING"] == "SSL_AL_SSL"):
-                    expert.init_model_predictions(full_dataloader, mod="SSL")
+                    expert.init_model_predictions(full_dataloader, mod="SSL", prediction_type=run_param["EXPERT_PREDICT"])
                     expert_fns.append(expert.predict_model_predefined_ssl)
                 elif run_param["SETTING"] == "NORMAL":
-                    expert.init_model_predictions(full_dataloader, mod="AL")
+                    expert.init_model_predictions(full_dataloader, mod="AL", prediction_type=run_param["EXPERT_PREDICT"])
                     expert_fns.append(expert.predict_model_predefined_al)
                 elif run_param["SETTING"] == "PERFECT":
                     expert_fns.append(expert.predict)
@@ -763,6 +849,8 @@ def one_run(dataManager, run_param, all_metrics, print_text, run_metrics, count,
             #Block to create df of artificial labels, real predictions and which images were labeled
             fullDataset = nih_dataloader.getFullDataloader().dataset
             labeled_df = save_expert_labels(fullDataset, experts, labeled_filenames)
+            
+            labeled_dfs[seed][fold_idx] = labeled_df
             
 
             metrics_train_all, metrics_val_all, metrics_test_all, metrics_full_all, metrics_pretrain_all = L2D_Verma(train_loader, val_loader, test_loader, full_dataloader, expert_fns, run_param, seed, fold_idx, experts=experts)
@@ -784,7 +872,7 @@ def one_run(dataManager, run_param, all_metrics, print_text, run_metrics, count,
                 "full": all_full_metrics,
             }
 
-            run_metrics["artificial expert predictions"] = labeled_df
+            run_metrics["artificial expert predictions"] = labeled_dfs
 
             run_metrics["expert metrics"] = expert_metrics
             run_metrics["verma"] = verma_metrics
@@ -797,11 +885,11 @@ def one_run(dataManager, run_param, all_metrics, print_text, run_metrics, count,
                 temp_count = count - 1
             else:
                 all_metrics[-1] = run_metrics
-            with open(f'{run_param["Parent_PATH"]}/Metrics_Folder/Metrics_{temp_count}.pickle', 'wb') as handle:
+            with open(f'{run_param["Parent_PATH"]}/Metrics_Folder/{run_param["DATASET"]}/Metrics_{temp_count}.pickle', 'wb') as handle:
                 pickle.dump(all_metrics, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
-    return expert_metrics, verma_metrics, hemmer_metrics, metrics_added, labeled_df
+    return expert_metrics, verma_metrics, hemmer_metrics, metrics_added, labeled_dfs
 
             
 
@@ -814,7 +902,7 @@ def run_experiment(param):
 
     count = 0
 
-    list_of_files = glob.glob(f'{param["Parent_PATH"]}/Metrics_Folder/*') # * means all if need specific format then *.csv
+    list_of_files = glob.glob(f'{param["Parent_PATH"]}/Metrics_Folder/{param["DATASET"]}/*') # * means all if need specific format then *.csv
     
     if len(list_of_files) >= 1:
         latest_file = max(list_of_files, key=os.path.getctime)
@@ -824,11 +912,15 @@ def run_experiment(param):
         with open(latest_file, 'rb') as handle:
             expert_metrics_all = pickle.load(handle)
 
-        runs = [{i:run[i] for i in run if i not in ["expert metrics", "verma", "hemmer"]} for run in expert_metrics_all]
+        runs = [{i:run[i] for i in run if i not in ["expert metrics", "verma", "hemmer", "artificial expert predictions"]} for run in expert_metrics_all]
+        
+        print(f"Len of runs: {len(runs)}")
 
         if "pickle" in latest_file:
 
             count = int(latest_file.split("/")[-1][8:-7]) + 1
+            
+            print(f"Current count: {count}")
 
     #Every pair of labeler ids
     for labeler_ids in param["LABELER_IDS"]:
@@ -836,8 +928,17 @@ def run_experiment(param):
         run_param["labeler_ids"] = convert_ids_to_string(labeler_ids)
         
 
-        dataManager = ds.DataManager(path=param["PATH"], target=param["TARGET"], param=run_param, seeds=param["SEEDS"])
+        if param["DATASET"] == "NIH":
+            dataManager = ds.DataManager(path=param["PATH"], target=param["TARGET"], param=run_param, seeds=param["SEEDS"])
+        elif param["DATASET"] == "CIFAR10N":
+            dataManager = cif.CIFAR10NDataManager(path=param["PATH"], path_labels=f'{param["PATH"]}{param["DATASET"]}', path_data=f'{param["PATH"]}/{param["DATASET"]}', param=run_param, seeds=param["SEEDS"])
+        elif param["DATASET"] == "VIN":
+            dataManager = vin.VINDataManager(path=param["PATH"], target=param["TARGET"], param=run_param, seeds=param["SEEDS"])
+        elif param["DATASET"] == "CIFAR100":
+            dataManager = cif100.CIFAR100DataManager(path=param["PATH"], path_labels=f'{param["PATH"]}{param["DATASET"]}', path_data=f'{param["PATH"]}/{param["DATASET"]}', param=run_param, seeds=param["SEEDS"])
         dataManager.createData()
+
+        run_param["DATASET"] = param["DATASET"]
 
         for init_size in param["AL"]["INITIAL_SIZE"]:
             run_param["AL"]["INITIAL_SIZE"] = init_size
@@ -880,8 +981,8 @@ def run_experiment(param):
                                     for expert_predict in param["EXPERT_PREDICT"]:
                                         run_param["EXPERT_PREDICT"] = expert_predict
 
-                                        if ((setting == "SSL" or setting == "SSL_AL" or setting == "SSL_AL_SSL") and (expert_predict == "right")):
-                                            continue
+                                        #if ((setting == "SSL" or setting == "SSL_AL" or setting == "SSL_AL_SSL") and (expert_predict == "right")):
+                                        #    continue
 
                                         if (expert_predict == "target") and (cost != param["AL"]["COST"][0]):
                                             continue
@@ -893,6 +994,8 @@ def run_experiment(param):
 
                                             for epochs_pretrain in param["epochs_pretrain"]:
                                                 run_param["epochs_pretrain"] = epochs_pretrain
+
+                                                run_param = build_param(run_param)
 
                                                 metrics_save = {}
                                                 metrics_save["labeler_ids"] = labeler_ids
@@ -933,6 +1036,8 @@ def run_experiment(param):
                                                 print_text = f"""\n \n \n #############################################################
                                                 NEW RUN
 
+                                                Dataset: {param["DATASET"]}
+                                                Labelerids: {labeler_ids}
                                                 Initial size: {init_size}
                                                 Batch size AL: {labels_per_round}
                                                 Max rounds: {rounds}
@@ -947,15 +1052,13 @@ def run_experiment(param):
                                                 """
 
                                                 start_time = time.time()
-                                                #dataManager, run_param, all_metrics, print_text, run_metrics, count, current_index=None
-                                                expert_metrics, verma_metrics, hemmer_metrics, metrics_added, labeled_df = one_run(dataManager, run_param, expert_metrics_all.copy(), print_text, metrics_save, count, current_index)
 
-                                                #print("DELETE ME")
-                                                #return one_run(dataManager, run_param, expert_metrics_all.copy(), print_text, metrics_save, count, current_index)
+                                                expert_metrics, verma_metrics, hemmer_metrics, metrics_added, labeled_dfs = one_run(dataManager, run_param, expert_metrics_all.copy(), print_text, metrics_save, count, current_index)
+
                                                 
                                                 print("--- %s seconds ---" % (time.time() - start_time))
 
-                                                metrics_save["artificial expert predictions"] = labeled_df
+                                                metrics_save["artificial expert predictions"] = labeled_dfs
                                                 metrics_save["expert metrics"] = expert_metrics
                                                 metrics_save["verma"] = verma_metrics
                                                 metrics_save["hemmer"] = hemmer_metrics
@@ -966,7 +1069,7 @@ def run_experiment(param):
                                                 else:
                                                     expert_metrics_all.append(metrics_save)
                                                 if metrics_added:
-                                                    with open(f'{param["Parent_PATH"]}/Metrics_Folder/Metrics_{count - ensure_count}.pickle', 'wb') as handle:
+                                                    with open(f'{param["Parent_PATH"]}/Metrics_Folder/{param["DATASET"]}/Metrics_{count - ensure_count}.pickle', 'wb') as handle:
                                                         pickle.dump(expert_metrics_all, handle, protocol=pickle.HIGHEST_PROTOCOL)
                                                 if current_index is None:
                                                     count += 1
@@ -1063,7 +1166,7 @@ def get_labeled_images_df(labeled_filenames):
     """
     dfs = []
     for labelerId, filelist in labeled_filenames["starting labels"].items():
-        dfs.append(pd.DataFrame({"filename": filelist, f"{labelerId}_starting_label": [1 for i in range(len(filelist))]}))
+        dfs.append(pd.DataFrame({"filename": [str(j) for j in filelist], f"{labelerId}_starting_label": [1 for i in range(len(filelist))]}))
     starting_labels = dfs[0]
     for i in range(1, len(dfs)):
         starting_labels = pd.merge(starting_labels, dfs[i], how="outer")
@@ -1080,11 +1183,23 @@ def get_labeled_images_df(labeled_filenames):
 #CUDA_LAUNCH_BLOCKING=1
 #torch.backends.cudnn.benchmark = True
 
+def build_param_from_json(data, path, num_worker):
+    param = data.copy()
+    param["Parent_PATH"] = path
+    param["PATH"] = f"{path}/{data['PATH']}"
+    param["ckp_dir"] = f"{path}/{data['ckp_dir']}"
+    param["num_worker"] = num_worker
+    param["AL"]["COST"] = []
+    for element in data["AL"]["COST"]:
+        param["AL"]["COST"].append((element[0], element[1]))
+    return param
 
 # In[ ]:
 def main(args):
 
     path = args[0]
+
+    param_file = args[2]
 
     num_worker = 4
     if len(args) >= 2:
@@ -1093,14 +1208,21 @@ def main(args):
     if "liebschner" not in path and "joli" not in path:
         return
 
-    param = {
-        "PATH": f"{path}/Datasets/NIH/",
+    with open(param_file, 'r') as f:
+        param = json.load(f)
+
+    param = build_param_from_json(param, path, num_worker)
+
+    """param = {
+        "DATASET": "CIFAR100",
+        "PATH": f"{path}/Datasets/",
         "Parent_PATH": path,
         "TARGET": "Airspace_Opacity",
-        "LABELER_IDS": [[4323195249, 4295232296], [4295349121, 4295342357], [4295342357, 4295354117]],
+        #"LABELER_IDS": [[4323195249, 4295232296], [4295349121, 4295342357], [4295342357, 4295354117]],
+        "LABELER_IDS": [[123, 456]],
         "K": 10, #Number of folds
-        "SEEDS": [1, 2, 3, 4], #Seeds for the experiments
-        #"SEEDS": [1], #Seeds for the experiments
+        #"SEEDS": [1, 2, 3, 4], #Seeds for the experiments
+        "SEEDS": [1], #Seeds for the experiments
         "GT": True, # Determines if the classifier gets all data with GT Label or only the labeld data
         #"MOD": ["confidence", "disagreement", "disagreement_diff", "ssl", "normal"], #Determines the experiment modus
         "MOD": ["confidence"], #Determines the experiment modus
@@ -1117,7 +1239,7 @@ def main(args):
         "NUM_CLASSES": 2,
 
         #"EXPERT_PREDICT": ["right", "target"],
-        "EXPERT_PREDICT": ["target"],
+        "EXPERT_PREDICT": ["target", "right"],
 
         "AL": { #Parameter for Active Learning
             "INITIAL_SIZE": [4, 8, 16, 32], #
@@ -1175,6 +1297,26 @@ def main(args):
             },
             "EPOCHS": 30,
         },
+
+        "CIFAR100": {
+            "EXPERTS": {
+                "123": {
+                    "strength": 60,
+                    "binary": False,
+                    "num_classes": 20,
+                    "per_s": 1.0,
+                    "per_w": 0.0
+                },
+                "456": {
+                    "strength": 60,
+                    "binary": False,
+                    "num_classes": 20,
+                    "per_s": 1.0,
+                    "per_w": 0.0
+                }
+            },
+        },
+        
     
     
         "epochs_pretrain": [0],
@@ -1196,10 +1338,62 @@ def main(args):
 
         #Params for cluster training
         "num_worker": num_worker,
-        "cluster": True
-    }
+        "cluster": True,
+        "IMAGE_SIZE": 128,
+    }"""
 
     expert_metrics_all = run_experiment(param)
+
+def build_param(param):
+    """
+    Function to add parameters based on the selected dataset and other parameters
+    Makes it easier to try different things without manually changing each parameter
+    """
+    if param["DATASET"] == "NIH":
+        param["TARGET"]: "Airspace_Opacity"
+        param["SSL"]["N_IMGS_PER_EPOCH"] = 4000 # Eventuell berechnen?
+        param["IMAGE_SIZE"] = 128
+        param["EMBEDDED"]["ARGS"]["num_classes"] = 2
+        param["NUM_CLASSES"] = 2
+        param["n_classes"] = 2
+        if param["EXPERT_PREDICT"] == "right":
+            pass
+        elif param["EXPERT_PREDICT"] == "target":
+            pass
+    elif param["DATASET"] == "VIN":
+        param["TARGET"] == 0
+        param["SSL"]["N_IMGS_PER_EPOCH"] = 4000 # Eventuell berechnen?
+        param["IMAGE_SIZE"] = 128
+        param["EMBEDDED"]["ARGS"]["num_classes"] = 2
+        param["NUM_CLASSES"] = 2
+        param["n_classes"] = 2
+        if param["EXPERT_PREDICT"] == "right":
+            pass
+        elif param["EXPERT_PREDICT"] == "target":
+            pass
+    elif param["DATASET"] == "CIFAR10N":
+        param["SSL"]["N_IMGS_PER_EPOCH"] = 800 # Anpassen
+        param["IMAGE_SIZE"] = 32
+        param["EMBEDDED"]["ARGS"]["num_classes"] = 10
+        if param["EXPERT_PREDICT"] == "right":
+            param["NUM_CLASSES"] = 2
+            param["n_classes"] = 2
+        elif param["EXPERT_PREDICT"] == "target":
+            param["NUM_CLASSES"] = 10
+            param["n_classes"] = 10
+            pass
+    elif param["DATASET"] == "CIFAR100":
+        param["SSL"]["N_IMGS_PER_EPOCH"] = 800 # Anpassen
+        param["IMAGE_SIZE"] = 32
+        param["EMBEDDED"]["ARGS"]["num_classes"] = 100
+        if param["EXPERT_PREDICT"] == "right":
+            param["NUM_CLASSES"] = 2
+            param["n_classes"] = 2
+        elif param["EXPERT_PREDICT"] == "target":
+            param["NUM_CLASSES"] = 100
+            param["n_classes"] = 100
+            pass
+    return param
 
 if __name__ == "__main__":
     main(sys.argv[1:])

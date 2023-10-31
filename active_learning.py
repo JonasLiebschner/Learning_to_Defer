@@ -37,6 +37,8 @@ from AL.metrics import *
 from AL.neural_network import NetSimple
 from AL.neural_network import ResnetPretrained
 
+from sklearn.metrics import fbeta_score
+
 import Dataset.Dataset as ds
 import expert as ex
 
@@ -63,7 +65,10 @@ class NIHExpertDatasetMemory():
         expert_preds: used if expert_fn or have different expert model
         """
         self.preprocess = preprocess
-        self.filenames = filenames
+        if param["DATASET"] == "NIH" or param["DATASET"] == "VIN":
+            self.filenames = filenames
+        elif param["DATASET"] == "CIFAR10N" or param["DATASET"] == "CIFAR100":
+            self.filenames = [int(filename) for filename in filenames]
         self.targets = np.array(targets)
         self.expert_fn = expert_fn
         self.labeled = np.array(labeled)
@@ -918,22 +923,41 @@ def metrics_print_expert(model, data_loader, expert=None, defer_net = False, id=
         print(mod)
         print(prediction_type)
         print('Accuracy of the network on the %d test images: %.3f %%' % (total, accurancy))
+
+    if param["n_classes"] == 2:
+        tn, fp, fn, tp = sklearn.metrics.confusion_matrix(label_list, predictions_list, labels=[0, 1]).ravel()
+        f1 = sklearn.metrics.f1_score(label_list, predictions_list)
+        ac_balanced = sklearn.metrics.balanced_accuracy_score(label_list, predictions_list)
+        f_05 = fbeta_score(y_true, y_pred, beta=0.5)
+        f_2 = fbeta_score(y_true, y_pred, beta=2)
+
+        met = {
+            "tn": tn,
+            "fp": fp,
+            "fn": fn,
+            "tp": tp,
+            "accurancy": accurancy,
+            "f1": f1,
+            "f0.5": f_05,
+            "f2": f_2,
+            "accurancy_balanced": ac_balanced,
+        }
+    if param["n_classes"] >= 2:
+        conf_matrix = sklearn.metrics.confusion_matrix(label_list, predictions_list, labels=[i for i in range(param["n_classes"])]).ravel()
+        f1 = sklearn.metrics.f1_score(label_list, predictions_list, average="macro")
+        ac_balanced = sklearn.metrics.balanced_accuracy_score(label_list, predictions_list)
+        f_05 = fbeta_score(y_true, y_pred, average="macro", beta=0.5)
+        f_2 = fbeta_score(y_true, y_pred, average="macro", beta=2)
+
+        met = {
+            "conf_matrix": conf_matrix,
+            "accurancy": accurancy,
+            "f1": f1,
+            "f0.5": f_05,
+            "f2": f_2,
+            "accurancy_balanced": ac_balanced,
+        }
     
-    tn, fp, fn, tp = sklearn.metrics.confusion_matrix(label_list, predictions_list, labels=[0, 1]).ravel()
-
-    f1 = sklearn.metrics.f1_score(label_list, predictions_list)
-
-    ac_balanced = sklearn.metrics.balanced_accuracy_score(label_list, predictions_list)
-
-    met = {
-        "tn": tn,
-        "fp": fp,
-        "fn": fn,
-        "tp": tp,
-        "accurancy": accurancy,
-        "f1": f1,
-        "accurancy_balanced": ac_balanced,
-    }
 
     if param["NEPTUNE"]["NEPTUNE"]:
         if step == "Train":
@@ -961,7 +985,7 @@ def metrics_print_expert(model, data_loader, expert=None, defer_net = False, id=
 
     if print_result:
         print("Confusion Matrix:")
-        print(sklearn.metrics.confusion_matrix(label_list, predictions_list, labels=[0, 1]))
+        print(sklearn.metrics.confusion_matrix(label_list, predictions_list, labels=[i for i in range(param["n_classes"])]))
         print("F1 Score: " + str(f1))
 
         print("Accuracy balanced")

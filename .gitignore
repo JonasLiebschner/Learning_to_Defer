@@ -134,3 +134,5 @@ dmypy.json
 neptune_config.json
 
 SSL_Working/
+
+slurm*
