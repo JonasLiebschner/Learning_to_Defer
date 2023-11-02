@@ -142,11 +142,6 @@ class Expert:
                     self.prebuild_predictions_al += target_prediction
                     
                 self.prebuild_filenames_al += hpred
-                
-        print("DELETE ME")
-        print("Init predictions")
-        print(self.prebuild_predictions_al)
-        print(self.prebuild_predictions_ssl)
     
     def predict_model_predefined(self, img, target, filenames, mod):
         if mod == "SSL":

@@ -1,6 +1,6 @@
 #import Verma.experts as vexp
 import Verma.losses as vlos
-from Verma.utils import AverageMeter, accuracy
+from Verma.utils import AverageMeter, accuracy, AverageMeterOptimized
 import Verma.resnet50 as vres
 
 import copy
@@ -79,7 +79,8 @@ def train(model, train_loader, valid_loader, test_loader, expert_fns, config, se
             n_classes,
             config["alpha"],
             config,
-            classifier_only=True
+            classifier_only=True,
+            param=param
         )
 
         experts_fns_eval = []
@@ -120,6 +121,7 @@ def train(model, train_loader, valid_loader, test_loader, expert_fns, config, se
             n_classes,
             config["alpha"],
             config,
+            param
         )
 
         experts_fns_eval = []
@@ -270,18 +272,27 @@ def train_epoch(
     n_classes,
     alpha,
     config,
-    classifier_only=False
+    classifier_only=False,
+    param=None
 ):
     """ Train for one epoch """
     
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     batch_time = AverageMeter()
-    losses = AverageMeter()
-    top1 = AverageMeter()
-
+    #losses = AverageMeter()
+    #top1 = AverageMeter()
+    losses = AverageMeterOptimized()
+    top1 = AverageMeterOptimized()
+    
     model.train()
     end = time.time()
+
+    print_threshold = 10
+    if "CIFAR" in param["DATASET"]:
+        print_threshold = 20
+    elif "NIH" in param["DATASET"]:
+        print_threshold = 10
 
     epoch_train_loss = []
 
@@ -345,8 +356,13 @@ def train_epoch(
         # measure accuracy and record loss
         prec1 = accuracy(output.data, target, topk=(1,))[0]
         #losses.update(loss.data.item(), input.size(0))
-        losses.update(loss.detach().item(), input.size(0))
-        top1.update(prec1.detach().item(), input.size(0))
+        #losses.update(loss.detach().item(), input.size(0))
+        #top1.update(prec1.detach().item(), input.size(0))
+
+        #Optimized to not wait on tensor synchronization
+        losses.addTensor(loss.detach().clone(), input.size(0))
+        top1.addTensor(prec1.detach().clone(), input.size(0))
+        
 
         # compute gradient and do SGD step
         optimizer.zero_grad(set_to_none=True)
@@ -361,7 +377,9 @@ def train_epoch(
         end = time.time()
         iters += 1
 
-        if i % 10 == 0:
+        if i % print_threshold == 0:
+            losses.getAverage()
+            top1.getAverage()
             print(
                 "Epoch: [{0}][{1}/{2}]\t"
                 "Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t"
