@@ -77,9 +77,8 @@ class NIHExpertDatasetMemory():
         self.preload = False
         self.PATH = param["PATH"]
         
-        normalize = transforms.Normalize(mean=[x / 255.0 for x in [125.3]],
-                                         std=[x / 255.0 for x in [63.0]])
-        self.transform_test = transforms.Compose([transforms.Resize(128), transforms.ToTensor(), normalize])
+        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        self.transform_test = transforms.Compose([transforms.Resize(param["IMAGE_SIZE"]), transforms.ToTensor(), normalize])
 
         self.image_container = image_container
 
@@ -883,6 +882,7 @@ def metrics_print_expert(model, data_loader, expert=None, defer_net = False, id=
             expert_pred = expert_pred.long()
             if prediction_type == "right":
                 expert_pred = (expert_pred == label) *1
+
             images, labels = images.to(device), expert_pred.to(device)
 
             if mod == "al":
@@ -898,22 +898,14 @@ def metrics_print_expert(model, data_loader, expert=None, defer_net = False, id=
             elif mod == "perfect":
                 predictions = expert_pred.to(device)
 
-            if cou == 1:
-                print("###########")
-                print("Predictions:")
-                print(predictions)
-                #print(preds)
-                #print(preds2)
-                cou = 2
-
             total += labels.size(0)
-            correct += (predictions == labels).sum().item()
+            #correct += (predictions == labels).sum().item()
+            correct += torch.sum(predictions == labels).item()
 
             label_list.extend(labels.cpu().numpy())
             predictions_list.extend(predictions.cpu().numpy())
             
-
-                             
+                    
     label_list = np.array(label_list)
     predictions_list = np.array(predictions_list)
 
@@ -923,6 +915,10 @@ def metrics_print_expert(model, data_loader, expert=None, defer_net = False, id=
         print(mod)
         print(prediction_type)
         print('Accuracy of the network on the %d test images: %.3f %%' % (total, accurancy))
+
+    print("Unique values")
+    print(f"True: {np.unique(label_list)}")
+    print(f"Predicted: {np.unique(predictions_list)}")
 
     if param["n_classes"] == 2:
         tn, fp, fn, tp = sklearn.metrics.confusion_matrix(label_list, predictions_list, labels=[0, 1]).ravel()
@@ -1000,7 +996,7 @@ def testExpert(expert, dataset, image_container, param, mod, prediction_type, se
     final_dataset = NIHExpertDatasetMemory(None, dataset.getAllFilenames(), np.array(dataset.getAllTargets()), expert.predict , [1]*len(dataset.getAllIndices()), 
                                                        dataset.getAllIndices(), param=param, preload=True, image_container=image_container)
 
-    data_loader = DataLoader(dataset=final_dataset, batch_size=128, shuffle=True, num_workers=param["num_worker"], pin_memory=True)
+    data_loader = DataLoader(dataset=final_dataset, batch_size=256, shuffle=True, num_workers=param["num_worker"], pin_memory=True)
 
     if param["NEPTUNE"]["NEPTUNE"]:
         run = param["NEPTUNE"]["RUN"]
