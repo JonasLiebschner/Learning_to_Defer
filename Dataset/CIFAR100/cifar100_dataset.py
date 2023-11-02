@@ -63,7 +63,7 @@ class BasicDatasetCIFAR100(dsc.BasicDataset):
                                   79: 13, 80: 16, 81: 19, 82: 2, 83: 4, 84: 6, 85: 19, 86: 5, 87: 5, 88: 8, 89: 19,
                                   90: 18, 91: 1, 92: 2, 93: 15, 94: 6, 95: 0, 96: 17, 97: 8, 98: 14, 99: 13}
 
-        self.gt_df = self.gt_df.replace(fine_id_coarse_id)
+        self.gt_df["GT"] = self.gt_df["GT"].replace(fine_id_coarse_id)
 
         self.targets = self.gt_df["GT"].tolist()
 
@@ -289,6 +289,11 @@ class CIFAR100_K_Fold_Dataloader(dsc.K_Fold_Dataloader):
             expert_test = expert_test[["Image ID", "GT"]]
             
             print("Length of train + test + val: " + str(len(expert_train) + len(expert_val) + len(expert_test)))
+            print(f"Len train Image ID: {len(train_ids)}")
+            print(f"Len val Image ID: {len(val_ids)}")
+            print(f"Len test Image ID: {len(test_ids)}")
+
+            print(f'Overlap {len(expert_train[expert_train["Image ID"].isin(expert_val["Image ID"])])}, {len(expert_train[expert_train["Image ID"].isin(expert_val["Image ID"])])}')
 
             self.k_fold_datasets.append((expert_train, expert_val, expert_test))
 
