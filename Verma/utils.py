@@ -63,9 +63,9 @@ class AverageMeterOptimized(object):
         # self.avg = self.sum / (self.count + 1e-20)
         self.avg = self.sum / self.count"""
 
-    def addTensor(self, tensor):
+    def addTensor(self, tensor, n=1):
         self.tensors.append(tensor)
-        self.count += 1
+        self.count += n
 
     def getAverage(self):
         if len(self.tensors) >= 1:
