@@ -845,12 +845,16 @@ def run_expert(model, epochs, dataloaders, apply_softmax = False, param=None, id
         # train for one epoch
         train_expert_confidence(train_loader=train_loader, model=model, expert=expert, optimizer=optimizer, scheduler=scheduler, epoch=epoch, apply_softmax=apply_softmax, param=param, 
                                 mod=mod, prediction_type=prediction_type)
-        #if epoch % 10 == 0 and epoch != epochs and epoch != 0:
-        #   print("Eval")
-        #    metrics_print_expert(model, val_loader, id, seed=seed, fold=fold, mod=mod, prediction_type=prediction_type, expert=expert, param=param)
-        met = metrics_print_expert(model, data_loader=val_loader, id=id, seed=seed, fold=fold, n_images=n_images, mod=mod, prediction_type=prediction_type, expert=expert, param=param, 
-                                   print_result=False, step="Train", epoch=epoch)
-        train_metrics.append(met)
+
+        if param["DATASET"] == "NIH":
+            met = metrics_print_expert(model, data_loader=val_loader, id=id, seed=seed, fold=fold, n_images=n_images, mod=mod, prediction_type=prediction_type, expert=expert, 
+                                       param=param, print_result=False, step="Train", epoch=epoch)
+            train_metrics.append(met)
+        elif "CIFAR" in param["DATASET"]:
+            if epoch%10 == 0:
+                met = metrics_print_expert(model, data_loader=val_loader, id=id, seed=seed, fold=fold, n_images=n_images, mod=mod, prediction_type=prediction_type, expert=expert, 
+                                           param=param, print_result=False, step="Train", epoch=epoch)
+                train_metrics.append(met)
             
     val_metrics = metrics_print_expert(model, data_loader=val_loader, id=id, seed=seed, fold=fold, n_images=n_images, expert=expert, mod=mod, prediction_type=prediction_type, param=param, step="Val")
 
