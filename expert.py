@@ -132,7 +132,7 @@ class Expert:
                     self.prebuild_predictions_ssl += target_prediction
                 
                 self.prebuild_filenames_ssl += hpred
-            self.prebuild_ssl_dict = {filename.item(): prediction if torch.is_tensor(filename) else filename: prediction for filename, prediction in zip(self.prebuild_filenames_ssl, self.prebuild_predictions_ssl)}
+            self.prebuild_ssl_dict = {(filename.item() if torch.is_tensor(filename) else filename): prediction for filename, prediction in zip(self.prebuild_filenames_ssl, self.prebuild_predictions_ssl)}
         elif mod == "AL":
             for i, (input, target, hpred) in enumerate(train_dataloader):
                 result = self.predictAL(input.to(self.device), target, hpred).tolist()
@@ -151,7 +151,7 @@ class Expert:
                     self.prebuild_predictions_al += target_prediction
                     
                 self.prebuild_filenames_al += hpred
-            self.prebuild_al_dict = {filename.item(): prediction if torch.is_tensor(filename) else filename: prediction for filename, prediction in zip(self.prebuild_filenames_al, self.prebuild_predictions_al)}
+            self.prebuild_al_dict = {(filename.item() if torch.is_tensor(filename) else filename): prediction for filename, prediction in zip(self.prebuild_filenames_al, self.prebuild_predictions_al)}
             #self.filename_prediction_dict_al = {filename.item(): prediction for filename, prediction in zip(self.prebuild_filenames_ssl, self.prebuild_predictions_ssl)}
 
         # Create a dictionary to store filename-prediction pairs
