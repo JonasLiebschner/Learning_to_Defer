@@ -66,6 +66,7 @@ class Expert:
         #return new_array
         if torch.is_tensor(fnames):
             fnames = fnames.tolist()
+        fnames = [fname.item() if torch.is_tensor(fname) else fname for fname in fnames]
         #return np.array(self.predictions.loc[fnames, str(self.labelerId)])
         #old = np.array(self.predictions.loc[fnames, str(self.labelerId)])
         new = np.array([self.predictions_dict.get(fname) for fname in fnames])
@@ -131,7 +132,7 @@ class Expert:
                     self.prebuild_predictions_ssl += target_prediction
                 
                 self.prebuild_filenames_ssl += hpred
-            self.prebuild_ssl_dict = {filename.item(): prediction for filename, prediction in zip(self.prebuild_filenames_ssl, self.prebuild_predictions_ssl)}
+            self.prebuild_ssl_dict = {filename.item(): prediction if torch.is_tensor(filename) else filename: prediction for filename, prediction in zip(self.prebuild_filenames_ssl, self.prebuild_predictions_ssl)}
         elif mod == "AL":
             for i, (input, target, hpred) in enumerate(train_dataloader):
                 result = self.predictAL(input.to(self.device), target, hpred).tolist()
@@ -150,7 +151,7 @@ class Expert:
                     self.prebuild_predictions_al += target_prediction
                     
                 self.prebuild_filenames_al += hpred
-            self.prebuild_al_dict = {filename.item(): prediction for filename, prediction in zip(self.prebuild_filenames_al, self.prebuild_predictions_al)}
+            self.prebuild_al_dict = {filename.item(): prediction if torch.is_tensor(filename) else filename: prediction for filename, prediction in zip(self.prebuild_filenames_al, self.prebuild_predictions_al)}
             #self.filename_prediction_dict_al = {filename.item(): prediction for filename, prediction in zip(self.prebuild_filenames_ssl, self.prebuild_predictions_ssl)}
 
         # Create a dictionary to store filename-prediction pairs
@@ -159,18 +160,18 @@ class Expert:
     def predict_model_predefined(self, img, target, filenames, mod):
         if mod == "SSL":
             #return [self.prebuild_predictions_ssl[self.prebuild_filenames_ssl.index(filename)] for filename in filenames]
-            return [self.prebuild_ssl_dict[filename.item()] for filename in filenames]
+            return [self.prebuild_ssl_dict[filename.item()] if torch.is_tensor(filename) else self.prebuild_ssl_dict[filename] for filename in filenames]
         elif mod == "AL":
             #return [self.prebuild_predictions_al[self.prebuild_filenames_al.index(filename)] for filename in filenames]
-            return [self.prebuild_al_dict[filename.item()] for filename in filenames]
+            return [self.prebuild_al_dict[filename.item()] if torch.is_tensor(filename) else self.prebuild_al_dict[filename] for filename in filenames]
 
     def predict_model_predefined_al(self, img, target, filenames):
         #return [self.prebuild_predictions_al[self.prebuild_filenames_al.index(filename)] for filename in filenames]
-        return [self.prebuild_al_dict[filename.item()] for filename in filenames]
+        return [self.prebuild_al_dict[filename.item()] if torch.is_tensor(filename) else self.prebuild_al_dict[filename] for filename in filenames]
 
     def predict_model_predefined_ssl(self, img, target, filenames):
         #return [self.prebuild_predictions_ssl[self.prebuild_filenames_ssl.index(filename)] for filename in filenames]
-        return [self.prebuild_ssl_dict[filename.item()] for filename in filenames]
+        return [self.prebuild_ssl_dict[filename.item()] if torch.is_tensor(filename) else self.prebuild_ssl_dict[filename] for filename in filenames]
 
     def getModel(self, mod):
         if mod == "SSL":
