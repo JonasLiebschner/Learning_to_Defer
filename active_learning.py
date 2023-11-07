@@ -766,11 +766,12 @@ def train_expert_confidence(train_loader, optimizer, scheduler, epoch, apply_sof
     end = time.time()
     for i, (input, label, expert_pred, _, _, filenames ) in enumerate(train_loader):
         expert_pred = expert_pred.long()
-        target, input = expert_pred.to(device), input.to(device)
 
         if prediction_type == "right":
             expert_pred = (expert_pred == label) *1
         
+        target, input = expert_pred.to(device), input.to(device)
+
         if mod_al:
             # compute output
             output = model(input)
