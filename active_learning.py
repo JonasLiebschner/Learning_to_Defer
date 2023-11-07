@@ -772,6 +772,12 @@ def train_expert_confidence(train_loader, optimizer, scheduler, epoch, apply_sof
         
         target, input = expert_pred.to(device), input.to(device)
 
+        print("DELETE ME")
+        print("active_learning.py train_expert_confidence")
+        print("Targets")
+        print(target)
+        
+
         if mod_al:
             # compute output
             output = model(input)
@@ -781,6 +787,9 @@ def train_expert_confidence(train_loader, optimizer, scheduler, epoch, apply_sof
             scores = torch.softmax(logits, dim=1)
             #preds = torch.argmax(scores, dim=1).cpu().tolist()
             output = scores
+
+        print("Output")
+        print(output)
         
         # compute loss
         if apply_softmax:
@@ -845,7 +854,7 @@ def run_expert(model, epochs, dataloaders, apply_softmax = False, param=None, id
     for epoch in range(0, epochs):
         # train for one epoch
         train_expert_confidence(train_loader=train_loader, model=model, expert=expert, optimizer=optimizer, scheduler=scheduler, epoch=epoch, apply_softmax=apply_softmax, param=param, 
-                                mod=mod, prediction_type=prediction_type)
+                                mod=mod, prediction_type=param["EXPERT_PREDICT"])
 
         if param["DATASET"] == "NIH":
             met = metrics_print_expert(model, data_loader=val_loader, id=id, seed=seed, fold=fold, n_images=n_images, mod=mod, prediction_type=prediction_type, expert=expert, 
