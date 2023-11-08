@@ -697,7 +697,7 @@ class CIFAR100SSLDataset(dsc.SSLDataset):
             same_indices = []
             for class_number in data["GT"].unique():
                 indices_class[class_number] = [ind for ind in common_indices if data["GT"][ind] == class_number]
-                same_indices = random.sample(indices_class[class_number], min(round(k/len(data["GT"].unique()))), 1)
+                same_indices = random.sample(indices_class[class_number], min(round(k/len(data["GT"].unique())), 1))
 
             print(f"Same indices {same_indices}")
             pass
