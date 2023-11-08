@@ -468,11 +468,11 @@ def getExpertModels(indices, experts, train_dataset, val_dataset, test_dataset, 
         gc.collect()
         
         #expert_models.append(NetSimple(2, 3, 100, 100, 1000,500).to(device))
-        model_folder = param["Parent_PATH"]+"/SSL_Working/NIH/Embedded"
+        model_folder = param["Parent_PATH"]+f"/SSL_Working/{param['DATASET']}/Embedded"
         if param["cluster"]:
             model_folder += f"/Seed_{seed}_Fold_{fold}"
             
-        expert_models[labelerId] = ResnetPretrained(2, model_folder, type="50").to(device)
+        expert_models[labelerId] = ResnetPretrained(param["NUM_CLASSES"], model_folder, type="50", param=param).to(device)
         if torch.cuda.device_count() > 1:
             print("Use ", torch.cuda.device_count(), "GPUs!")
             expert_models[labelerId] = nn.DataParallel(expert_models[labelerId])
@@ -595,11 +595,11 @@ def getExpertModel(indices, train_dataset, val_dataset, test_dataset, expert, pa
     
     # train expert model on labeled data
     #model_expert = NetSimple(2, 3, 100, 100, 1000,500).to(device)
-    model_folder = param["Parent_PATH"]+"/SSL_Working/NIH/Embedded"
+    model_folder = param["Parent_PATH"]+f"/SSL_Working/{param['DATASET']}/Embedded"
     if param["cluster"]:
         model_folder += f"/Seed_{seed}_Fold_{fold}"
         
-    model_expert = ResnetPretrained(2, model_folder, type="50").to(device)
+    model_expert = ResnetPretrained(param["NUM_CLASSES"], model_folder, type="50", param=param).to(device)
     if torch.cuda.device_count() > 1:
         print("Use ", torch.cuda.device_count(), "GPUs!")
         model_expert = nn.DataParallel(model_expert)
@@ -699,11 +699,11 @@ def getExpertModelNormal(indices, train_dataset, val_dataset, test_dataset, expe
     
     # train expert model on labeled data
     #model_expert = NetSimple(2, 3, 100, 100, 1000,500).to(device)
-    model_folder = param["Parent_PATH"]+"/SSL_Working/NIH/Embedded"
+    model_folder = param["Parent_PATH"]+f"/SSL_Working/{param['DATASET']}/Embedded"
     if param["cluster"]:
         model_folder += f"/Seed_{seed}_Fold_{fold}"
     
-    model_expert = ResnetPretrained(2, model_folder, type="50").to(device)
+    model_expert = ResnetPretrained(param["NUM_CLASSES"], model_folder, type="50", param=param).to(device)
     if torch.cuda.device_count() > 1:
         print("Use ", torch.cuda.device_count(), "GPUs!")
         model_expert = nn.DataParallel(model_expert)
@@ -894,7 +894,7 @@ def metrics_print_expert(model, data_loader, expert=None, defer_net = False, id=
         for data in data_loader:
             images, label, expert_pred, _ ,_, filenames = data
             expert_pred = expert_pred.long()
-            if prediction_type == "right":
+            if param["EXPERT_PREDICT"] == "right":
                 expert_pred = (expert_pred == label) *1
 
             images, labels = images.to(device), expert_pred.to(device)

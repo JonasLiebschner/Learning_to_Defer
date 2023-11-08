@@ -148,7 +148,10 @@ class Expert:
                 elif prediction_type == "right":
                     target_prediction = []
                     for i in range(len(result)):
-                        gt = self.gt[self.gt["Image ID"] == hpred[i]]["GT"].item()
+                        if torch.is_tensor(hpred[i]):
+                            gt = self.gt[self.gt["Image ID"] == hpred[i].item()]["GT"].item()
+                        else:
+                            gt = self.gt[self.gt["Image ID"] == hpred[i]]["GT"].item()
                         if result[i] == 1:
                             target_prediction.append(gt)
                         else:
