@@ -684,6 +684,9 @@ class CIFAR100SSLDataset(dsc.SSLDataset):
             experts_indices[expert] = [j for j in all_indices if (data[str(expert)][j] != -1)]
             common_indices = set(common_indices).intersection(experts_indices[expert])
         common_indices = list(common_indices)
+        print("DELETE ME")
+        print("cifar100_dataset sample_indices")
+        print(f"Common Indices: {len(common_indices)}")
         #common_indices.sort()
 
         #print(f"Len common indices {len(common_indices)}")
@@ -694,7 +697,7 @@ class CIFAR100SSLDataset(dsc.SSLDataset):
             same_indices = []
             for class_number in data["GT"].unique():
                 indices_class[class_number] = [ind for ind in common_indices if data["GT"][ind] == class_number]
-                same_indices = random.sample(indices_class[class_number], round(k/len(data["GT"].unique())))
+                same_indices = random.sample(indices_class[class_number], min(round(k/len(data["GT"].unique()))), 1)
 
             print(f"Same indices {same_indices}")
             pass
@@ -717,13 +720,19 @@ class CIFAR100SSLDataset(dsc.SSLDataset):
                         working_indices_gt[class_number] = [ind for ind in working_indices if data["GT"][ind] == class_number]
 
                     for gt in data["GT"].unique():
+                        #print(f"GT loop with gt: {gt}")
+                        #print(f"Fraction round(k/len(data['GT'].unique()): {round(k/len(data['GT'].unique())}")
+                        #print("Len temp_indices: {len(temp_indices)}")
+                        #print(f"Other part: {(n - round(k/len(data['GT'].unique())))}")
                         while len(temp_indices) < (n - round(k/len(data["GT"].unique()))):
                             count += 1
                             temp = random.sample(working_indices_gt[gt], 1)
+                            #print(f"Dampled indice: {temp}")
                             if temp not in used_indices:
                                 temp_indices = temp_indices + temp
                                 used_indices = used_indices + temp
                             if count >= 1000:
+                                print("Count 1000 reached")
                                 temp = random.sample(used_indices, n-k-len(temp_indices))
                                 if isinstance(temp, list):
                                     temp_indices = temp_indices + temp
