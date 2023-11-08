@@ -696,7 +696,7 @@ class CIFAR100SSLDataset(dsc.SSLDataset):
             indices_class = {}
             same_indices = []
             gt_values = data["GT"].unique().copy() #List of all unique gt values
-            for class_number in shuffle(gt_values): #Go trougt the list randomly
+            for class_number in random.shuffle(gt_values): #Go trougt the list randomly
                 indices_class[class_number] = [ind for ind in common_indices if data["GT"][ind] == class_number] #Get the indices for the current class
                 if len(same_indices) < k: #When there are more indices to sample
                     max_sample_size = k - len(same_indices) #Max possible number to add to the current same indices
