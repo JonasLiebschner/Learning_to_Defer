@@ -325,7 +325,7 @@ def getQbQPoints(expert_models, data_loader, budget, mod=None, param=None):
                 preds = []
                 for i in range(outputs_exp.size()[0]):
                     pred_exp = outputs_exp.data[i].cpu().numpy()
-                    pred_exp = pred_exp[1]
+                    pred_exp = np.argmax(pred_exp)
                     #preds.append(round(pred_exp))
                     preds.append(pred_exp)
                     if (j == 0): #Add the indices only the first time
@@ -373,10 +373,12 @@ def getQbQPointsDifference(expert_models, data_loader, budget, mod=None, param=N
     assert ((mod is not None and (mod == "ssl" or mod == "al"))), "Give al or ssl as mod"
     
     prediction_matrix = None
+    prediction_matrix_values = None
     indices_all = []
     for data in data_loader:
         images, labels, _, indices, _, filenames = data
         experts_preds = []
+        experts_preds_values = []
         for j, expert_model in enumerate(expert_models):
             with torch.no_grad():
                 images = images.to(device)
@@ -392,26 +394,33 @@ def getQbQPointsDifference(expert_models, data_loader, budget, mod=None, param=N
                     outputs_exp = scores
                 
                 preds = []
+                preds_values = []
                 for i in range(outputs_exp.size()[0]):
                     pred_exp = outputs_exp.data[i].cpu().numpy()
-                    pred_exp = pred_exp[1]
+                    pred_exp = np.argmax(pred_exp)
                     #preds.append(round(pred_exp))
                     preds.append(pred_exp)
+                    preds_values.append(entropy(outputs_exp.data[i].cpu().numpy()))
                     if (j == 0): #Add the indices only the first time
                         indices_all.append(indices[i].item())
             experts_preds.append(np.array(preds))
+            experts_preds_values.append(np.array(preds_values))
 
         if prediction_matrix is None:
             prediction_matrix = np.swapaxes(np.array(experts_preds), 0, 1)
+            prediction_matrix_values = np.swapaxes(np.array(experts_preds_values), 0, 1)
         else:
             prediction_matrix = np.concatenate((prediction_matrix, np.swapaxes(np.array(experts_preds), 0, 1)), axis=0)
+            prediction_matrix_values = np.concatenate((prediction_matrix_values, np.swapaxes(np.array(experts_preds_values), 0, 1)), axis=0)
     predictions_matrix = prediction_matrix
 
     #Get where the experts disagree
     print(predictions_matrix.shape)
 
     matrixx = [row for row in predictions_matrix if disagree(np.round(row))]
-    points = np.array([np.sum(np.abs(row - 0.5)) for row in matrixx])
+    matrixx_values = [prediction_matrix_values[i] for i in len(predictions_matrix) if disagree(np.round(predictions_matrix[i]))]
+    points = np.array([np.sum(row) for row in matrixx_values])
+    #points = np.array([np.sum(np.abs(row - 0.5)) for row in matrixx])
 
     print("Disagreement on " + str(len(points)) + " Points")
     if param["NEPTUNE"]["NEPTUNE"]:
@@ -419,7 +428,7 @@ def getQbQPointsDifference(expert_models, data_loader, budget, mod=None, param=N
         run["Disagreement Points"].append(len(points))
 
     ids = []
-    for row in np.array(matrixx)[points.argsort()[:budget].tolist()]:
+    for row in np.array(matrixx)[points.argsort()[budget-:].tolist()]:
         ids.append(indices_all[np.argwhere(predictions_matrix == row)[0][0]])
 
     if len(ids) < budget:
@@ -429,7 +438,10 @@ def getQbQPointsDifference(expert_models, data_loader, budget, mod=None, param=N
         for row in np.array(matrixx)[points.argsort()[:(budget - len(ids))].tolist()]:
             ids.append(indices_all[np.argwhere(predictions_matrix == row)[0][0]])
 
+    print("active learning ids of dissagreement")
     print(ids)
+    print("Confidence list")
+    print(points)
     
     #print("Disagreement on " + str(len(ids)) + " Points")
     return ids[:budget]
