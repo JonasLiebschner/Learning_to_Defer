@@ -536,6 +536,9 @@ def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded
     dlval = sslDataset.get_val_loader_interface(exp, batch_size=64, num_workers=param["num_worker"], fold_idx=fold_idx)
     dtest = sslDataset.get_test_loader_interface(exp, batch_size=64, num_workers=param["num_worker"], fold_idx=fold_idx)
 
+    if param["expert_predict"] == "rigth":
+        args["n_classes"] == param["N_CLASSES"]
+
     wd_params, non_wd_params = [], []
     for name, params in model.named_parameters():
         if 'bn' in name:
