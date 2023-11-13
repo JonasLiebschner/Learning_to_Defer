@@ -181,13 +181,16 @@ def sampleIndices(n, k, all_indices, experten, seed = None, X=None, sample_equal
     
     if seed is not None:
         set_seed(seed, fold, text="")
+
+    all_indices_gt = {}
+    same_indices_gt = {}
     
     if X is not None and sample_equal:
-        all_indices_0 = [indice for indice in all_indices if X["GT"][indice] == 0]
-        all_indices_1 = [indice for indice in all_indices if X["GT"][indice] == 1]
-        same_indices_0 = random.sample(all_indices_0, round(k/2))
-        same_indices_1 = random.sample(all_indices_1, round(k/2))
-        same_indices = same_indices_0 + same_indices_1
+        same_indices = []
+        for gt in X["GT"].quinque():
+            all_indices_gt[gt] = [indice for indice in all_indices if X["GT"][indice] == gt]
+            same_indices_gt[gt] = random.sample(all_indices_gt[gt], round(k/len(X["GT"].quinque())))
+            same_indices += same_indices_gt[gt]
     else:
         same_indices = random.sample(all_indices, k)
         
@@ -199,19 +202,18 @@ def sampleIndices(n, k, all_indices, experten, seed = None, X=None, sample_equal
             indices[labelerId] = same_indices
     if k < n:
         for labelerId in experten:
+
+            working_indices = all_indices_gt
             temp_indices = []
             count = 0 # To avoid infinity loop
+            working_indices_gt = {}
 
             ######
             if sample_equal:
-                print(f"Indices with GT=0: {n/2} and with GT=1: {n/2}")
-                working_indices_gt[0] = all_indices_0
-                working_indices_gt[1] = all_indices_1
-                print(f"Len GT=0 {len(working_indices_gt[0])} and GT=1 {len(working_indices_gt[1])}")
-                for gt in [0, 1]:
-                    while len(temp_indices) < (n - round(k/2)):
+                for gt in X["GT"].quinque():
+                    while len(temp_indices) < (n - round(k/len(X["GT"].quinque()))):
                         count += 1
-                        temp = random.sample(working_indices_gt[gt], 1)
+                        temp = random.sample(all_indices_gt[gt], 1)
                         if temp not in used_indices:
                             temp_indices = temp_indices + temp
                             used_indices = used_indices + temp
@@ -787,8 +789,8 @@ def train_expert_confidence(train_loader, optimizer, scheduler, epoch, apply_sof
             scores = torch.softmax(logits, dim=1)
             #preds = torch.argmax(scores, dim=1).cpu().tolist()
             output = scores
-
-        print("Output")
+            
+        print("Outputs")
         print(output)
         
         # compute loss
@@ -953,7 +955,7 @@ def metrics_print_expert(model, data_loader, expert=None, defer_net = False, id=
             "accurancy_balanced": ac_balanced,
         }
     if param["n_classes"] >= 2:
-        conf_matrix = sklearn.metrics.confusion_matrix(label_list, predictions_list, labels=[i for i in range(param["n_classes"])]).ravel()
+        conf_matrix = sklearn.metrics.confusion_matrix(label_list, predictions_list, labels=[i for i in range(param["N_CLASSES"])]).ravel()
         f1 = sklearn.metrics.f1_score(label_list, predictions_list, average="macro")
         ac_balanced = sklearn.metrics.balanced_accuracy_score(label_list, predictions_list)
         f_05 = fbeta_score(label_list, predictions_list, average="macro", beta=0.5)
