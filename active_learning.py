@@ -181,13 +181,16 @@ def sampleIndices(n, k, all_indices, experten, seed = None, X=None, sample_equal
     
     if seed is not None:
         set_seed(seed, fold, text="")
+
+    all_indices_gt = {}
+    same_indices_gt = {}
     
     if X is not None and sample_equal:
-        all_indices_0 = [indice for indice in all_indices if X["GT"][indice] == 0]
-        all_indices_1 = [indice for indice in all_indices if X["GT"][indice] == 1]
-        same_indices_0 = random.sample(all_indices_0, round(k/2))
-        same_indices_1 = random.sample(all_indices_1, round(k/2))
-        same_indices = same_indices_0 + same_indices_1
+        same_indices = []
+        for gt in X["GT"].quinque():
+            all_indices_gt[gt] = [indice for indice in all_indices if X["GT"][indice] == gt]
+            same_indices_gt[gt] = random.sample(all_indices_gt[gt], round(k/len(X["GT"].quinque())))
+            same_indices += same_indices_gt[gt]
     else:
         same_indices = random.sample(all_indices, k)
         
@@ -199,19 +202,18 @@ def sampleIndices(n, k, all_indices, experten, seed = None, X=None, sample_equal
             indices[labelerId] = same_indices
     if k < n:
         for labelerId in experten:
+
+            working_indices = all_indices_gt
             temp_indices = []
             count = 0 # To avoid infinity loop
+            working_indices_gt = {}
 
             ######
             if sample_equal:
-                print(f"Indices with GT=0: {n/2} and with GT=1: {n/2}")
-                working_indices_gt[0] = all_indices_0
-                working_indices_gt[1] = all_indices_1
-                print(f"Len GT=0 {len(working_indices_gt[0])} and GT=1 {len(working_indices_gt[1])}")
-                for gt in [0, 1]:
-                    while len(temp_indices) < (n - round(k/2)):
+                for gt in X["GT"].quinque():
+                    while len(temp_indices) < (n - round(k/len(X["GT"].quinque()))):
                         count += 1
-                        temp = random.sample(working_indices_gt[gt], 1)
+                        temp = random.sample(all_indices_gt[gt], 1)
                         if temp not in used_indices:
                             temp_indices = temp_indices + temp
                             used_indices = used_indices + temp
@@ -323,7 +325,7 @@ def getQbQPoints(expert_models, data_loader, budget, mod=None, param=None):
                 preds = []
                 for i in range(outputs_exp.size()[0]):
                     pred_exp = outputs_exp.data[i].cpu().numpy()
-                    pred_exp = pred_exp[1]
+                    pred_exp = np.argmax(pred_exp)
                     #preds.append(round(pred_exp))
                     preds.append(pred_exp)
                     if (j == 0): #Add the indices only the first time
@@ -371,10 +373,12 @@ def getQbQPointsDifference(expert_models, data_loader, budget, mod=None, param=N
     assert ((mod is not None and (mod == "ssl" or mod == "al"))), "Give al or ssl as mod"
     
     prediction_matrix = None
+    prediction_matrix_values = None
     indices_all = []
     for data in data_loader:
         images, labels, _, indices, _, filenames = data
         experts_preds = []
+        experts_preds_values = []
         for j, expert_model in enumerate(expert_models):
             with torch.no_grad():
                 images = images.to(device)
@@ -390,26 +394,33 @@ def getQbQPointsDifference(expert_models, data_loader, budget, mod=None, param=N
                     outputs_exp = scores
                 
                 preds = []
+                preds_values = []
                 for i in range(outputs_exp.size()[0]):
                     pred_exp = outputs_exp.data[i].cpu().numpy()
-                    pred_exp = pred_exp[1]
+                    pred_exp = np.argmax(pred_exp)
                     #preds.append(round(pred_exp))
                     preds.append(pred_exp)
+                    preds_values.append(entropy(outputs_exp.data[i].cpu().numpy()))
                     if (j == 0): #Add the indices only the first time
                         indices_all.append(indices[i].item())
             experts_preds.append(np.array(preds))
+            experts_preds_values.append(np.array(preds_values))
 
         if prediction_matrix is None:
             prediction_matrix = np.swapaxes(np.array(experts_preds), 0, 1)
+            prediction_matrix_values = np.swapaxes(np.array(experts_preds_values), 0, 1)
         else:
             prediction_matrix = np.concatenate((prediction_matrix, np.swapaxes(np.array(experts_preds), 0, 1)), axis=0)
+            prediction_matrix_values = np.concatenate((prediction_matrix_values, np.swapaxes(np.array(experts_preds_values), 0, 1)), axis=0)
     predictions_matrix = prediction_matrix
 
     #Get where the experts disagree
     print(predictions_matrix.shape)
 
     matrixx = [row for row in predictions_matrix if disagree(np.round(row))]
-    points = np.array([np.sum(np.abs(row - 0.5)) for row in matrixx])
+    matrixx_values = [prediction_matrix_values[i] for i in len(predictions_matrix) if disagree(np.round(predictions_matrix[i]))]
+    points = np.array([np.sum(row) for row in matrixx_values])
+    #points = np.array([np.sum(np.abs(row - 0.5)) for row in matrixx])
 
     print("Disagreement on " + str(len(points)) + " Points")
     if param["NEPTUNE"]["NEPTUNE"]:
@@ -417,7 +428,7 @@ def getQbQPointsDifference(expert_models, data_loader, budget, mod=None, param=N
         run["Disagreement Points"].append(len(points))
 
     ids = []
-    for row in np.array(matrixx)[points.argsort()[:budget].tolist()]:
+    for row in np.array(matrixx)[points.argsort()[budget-:].tolist()]:
         ids.append(indices_all[np.argwhere(predictions_matrix == row)[0][0]])
 
     if len(ids) < budget:
@@ -427,7 +438,10 @@ def getQbQPointsDifference(expert_models, data_loader, budget, mod=None, param=N
         for row in np.array(matrixx)[points.argsort()[:(budget - len(ids))].tolist()]:
             ids.append(indices_all[np.argwhere(predictions_matrix == row)[0][0]])
 
+    print("active learning ids of dissagreement")
     print(ids)
+    print("Confidence list")
+    print(points)
     
     #print("Disagreement on " + str(len(ids)) + " Points")
     return ids[:budget]
