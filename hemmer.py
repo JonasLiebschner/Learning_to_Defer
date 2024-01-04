@@ -88,7 +88,7 @@ def run_team_performance_optimization(method, seed, data_loaders, expert_fns, pa
     overall_system_preds = []
     overall_targets = []
 
-    classifier = Network(output_size=param["NUM_CLASSES"], softmax_sigmoid="softmax", param=param).to(device)
+    classifier = Network(output_size=param["n_classes"], softmax_sigmoid="softmax", param=param).to(device)
 
     allocation_system = Network(output_size=param["NUM_EXPERTS"] + 1, softmax_sigmoid=allocation_system_activation_function, param=param).to(device)
 
@@ -329,6 +329,7 @@ def evaluate_one_epoch(epoch, feature_extractor, classifier, allocation_system, 
     for idx, expert_fn in enumerate(expert_fns):
         expert_preds[idx] = np.array(expert_fn(inputs_list, targets_list, filenames))
 
+
     classifier_outputs = classifier_outputs.cpu().numpy()
     allocation_system_outputs = allocation_system_outputs.cpu().numpy()
     targets = targets.cpu().numpy()
@@ -359,14 +360,14 @@ def joint_sparse_framework_loss(epoch, classifier_output, allocation_system_outp
 
     # set up zero-initialized tensor to store weighted team predictions
     batch_size = len(targets)
-    weighted_team_preds = torch.zeros((batch_size, param["NUM_CLASSES"])).to(classifier_output.device)
+    weighted_team_preds = torch.zeros((batch_size, param["n_classes"])).to(classifier_output.device)
 
     # for each team member add the weighted prediction to the team prediction
     # start with machine
     weighted_team_preds = weighted_team_preds + allocation_system_output[:, 0].reshape(-1, 1) * classifier_output
     # continue with human experts
     for idx in range(param["NUM_EXPERTS"]):
-        one_hot_expert_preds = torch.tensor(np.eye(param["NUM_CLASSES"])[expert_preds[idx].astype(int)]).to(classifier_output.device)
+        one_hot_expert_preds = torch.tensor(np.eye(param["n_classes"])[expert_preds[idx].astype(int)]).to(classifier_output.device)
         weighted_team_preds = weighted_team_preds + allocation_system_output[:, idx + 1].reshape(-1, 1) * one_hot_expert_preds
 
     # calculate team probabilities using softmax
@@ -404,10 +405,10 @@ def our_loss(epoch, classifier_output, allocation_system_output, expert_preds, t
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     batch_size = len(targets)
-    team_probs = torch.zeros((batch_size, param["NUM_CLASSES"])).to(classifier_output.device) # set up zero-initialized tensor to store team predictions
+    team_probs = torch.zeros((batch_size, param["n_classes"])).to(classifier_output.device) # set up zero-initialized tensor to store team predictions
     team_probs = team_probs + allocation_system_output[:, 0].reshape(-1, 1) * classifier_output # add the weighted classifier prediction to the team prediction
     for idx in range(param["NUM_EXPERTS"]): # continue with human experts
-        one_hot_expert_preds = torch.tensor(np.eye(param["NUM_CLASSES"])[expert_preds[idx].astype(int)]).to(classifier_output.device)
+        one_hot_expert_preds = torch.tensor(np.eye(param["n_classes"])[expert_preds[idx].astype(int)]).to(classifier_output.device)
         team_probs = team_probs + allocation_system_output[:, idx + 1].reshape(-1, 1) * one_hot_expert_preds
 
     log_output = torch.log(team_probs + 1e-7)
@@ -423,6 +424,7 @@ def get_metrics(epoch, allocation_system_outputs, classifier_outputs, expert_pre
     classifier_preds = np.argmax(classifier_outputs, 1)
     preds = np.vstack((classifier_preds, expert_preds)).T
     system_preds = preds[range(len(preds)), allocation_system_decisions.astype(int)]
+
     system_accuracy = get_accuracy(system_preds, targets)
 
     system_loss = loss_fn(epoch=epoch,

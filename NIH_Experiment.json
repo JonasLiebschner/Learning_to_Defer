@@ -6,7 +6,7 @@
     "K": 10,
     "SEEDS": [1, 2, 3, 4],
     "GT": true,
-    "MOD": ["confidence"],
+    "MOD": ["confidence", "ssl", "disagreement_diff"],
 
     "OVERLAP": [0, 100],
     "SAMPLE_EQUAL": [false, true],

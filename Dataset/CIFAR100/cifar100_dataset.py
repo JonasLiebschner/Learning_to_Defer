@@ -53,6 +53,20 @@ class BasicDatasetCIFAR100(dsc.BasicDataset):
         self.gt_df = pd.DataFrame({"GT": self.cifar_dataset.targets})
         self.gt_df = self.gt_df.rename_axis("Image ID").reset_index()
 
+        fine_id_coarse_id = {0: 4, 1: 1, 2: 14, 3: 8, 4: 0, 5: 6, 6: 7, 7: 7, 8: 18, 9: 3, 10: 3, 11: 14, 12: 9,
+                                  13: 18, 14: 7, 15: 11, 16: 3, 17: 9, 18: 7, 19: 11, 20: 6, 21: 11, 22: 5, 23: 10,
+                                  24: 7, 25: 6, 26: 13, 27: 15, 28: 3, 29: 15, 30: 0, 31: 11, 32: 1, 33: 10, 34: 12,
+                                  35: 14, 36: 16, 37: 9, 38: 11, 39: 5, 40: 5, 41: 19, 42: 8, 43: 8, 44: 15, 45: 13,
+                                  46: 14, 47: 17, 48: 18, 49: 10, 50: 16, 51: 4, 52: 17, 53: 4, 54: 2, 55: 0, 56: 17,
+                                  57: 4, 58: 18, 59: 17, 60: 10, 61: 3, 62: 2, 63: 12, 64: 12, 65: 16, 66: 12, 67: 1,
+                                  68: 9, 69: 19, 70: 2, 71: 10, 72: 0, 73: 1, 74: 16, 75: 12, 76: 9, 77: 13, 78: 15,
+                                  79: 13, 80: 16, 81: 19, 82: 2, 83: 4, 84: 6, 85: 19, 86: 5, 87: 5, 88: 8, 89: 19,
+                                  90: 18, 91: 1, 92: 2, 93: 15, 94: 6, 95: 0, 96: 17, 97: 8, 98: 14, 99: 13}
+
+        self.gt_df["GT"] = self.gt_df["GT"].replace(fine_id_coarse_id)
+
+        self.targets = self.gt_df["GT"].tolist()
+
         self.data = self.gt_df.copy()
 
         print("Number of images of the whole dataset: " + str(len(self.gt_df["Image ID"].values)))
@@ -135,7 +149,7 @@ class BasicDatasetCIFAR100(dsc.BasicDataset):
 class ImageContainerCIFAR100(dsc.ImageContainer):
     def __init__(self, basicDataset, preload=True, transform=None, preprocess=False, img_size=(32, 32)):
         self.data = basicDataset.cifar_trainset.data
-        self.targets = basicDataset.cifar_trainset.targets
+        self.targets = basicDataset.targets
         
         self.image_ids = basicDataset.getData()["Image ID"]
         self.preload = preload
@@ -275,6 +289,11 @@ class CIFAR100_K_Fold_Dataloader(dsc.K_Fold_Dataloader):
             expert_test = expert_test[["Image ID", "GT"]]
             
             print("Length of train + test + val: " + str(len(expert_train) + len(expert_val) + len(expert_test)))
+            print(f"Len train Image ID: {len(train_ids)}")
+            print(f"Len val Image ID: {len(val_ids)}")
+            print(f"Len test Image ID: {len(test_ids)}")
+
+            print(f'Overlap {len(expert_train[expert_train["Image ID"].isin(expert_val["Image ID"])])}, {len(expert_train[expert_train["Image ID"].isin(expert_val["Image ID"])])}')
 
             self.k_fold_datasets.append((expert_train, expert_val, expert_test))
 
@@ -560,6 +579,7 @@ class CIFAR100SSLDataset(dsc.SSLDataset):
         self.basicDataset = dataset
         self.kFoldDataloader = kFoldDataloader
         self.imageContainer = imageContainer
+        print(f"SSL LabelerIds {labeler_ids}")
         self.labeler_ids = labeler_ids
         self.param = param
         self.seed = seed
@@ -664,6 +684,9 @@ class CIFAR100SSLDataset(dsc.SSLDataset):
             experts_indices[expert] = [j for j in all_indices if (data[str(expert)][j] != -1)]
             common_indices = set(common_indices).intersection(experts_indices[expert])
         common_indices = list(common_indices)
+        print("DELETE ME")
+        print("cifar100_dataset sample_indices")
+        print(f"Common Indices: {len(common_indices)}")
         #common_indices.sort()
 
         #print(f"Len common indices {len(common_indices)}")
@@ -672,10 +695,14 @@ class CIFAR100SSLDataset(dsc.SSLDataset):
         if sample_equal:
             indices_class = {}
             same_indices = []
-            for class_number in data["GT"].unique():
-                indices_class[class_number] = [ind for ind in common_indices if data["GT"][ind] == class_number]
-                same_indices = random.sample(indices_class[class_number], round(k/len(data["GT"].unique())))
-
+            gt_values = data["GT"].unique().copy() #List of all unique gt values
+            random.shuffle(gt_values)
+            for class_number in gt_values: #Go trougt the list randomly
+                indices_class[class_number] = [ind for ind in common_indices if data["GT"][ind] == class_number] #Get the indices for the current class
+                if len(same_indices) < k: #When there are more indices to sample
+                    max_sample_size = k - len(same_indices) #Max possible number to add to the current same indices
+                    sample_size = min(max(round(k/len(data["GT"].unique())), 1), max_sample_size) #min prevents from selecting to many samples, max from to low fraction to even select one
+                    same_indices += random.sample(indices_class[class_number], sample_size)
             print(f"Same indices {same_indices}")
             pass
         else:
@@ -697,13 +724,19 @@ class CIFAR100SSLDataset(dsc.SSLDataset):
                         working_indices_gt[class_number] = [ind for ind in working_indices if data["GT"][ind] == class_number]
 
                     for gt in data["GT"].unique():
+                        #print(f"GT loop with gt: {gt}")
+                        #print(f"Fraction round(k/len(data['GT'].unique()): {round(k/len(data['GT'].unique())}")
+                        #print("Len temp_indices: {len(temp_indices)}")
+                        #print(f"Other part: {(n - round(k/len(data['GT'].unique())))}")
                         while len(temp_indices) < (n - round(k/len(data["GT"].unique()))):
                             count += 1
                             temp = random.sample(working_indices_gt[gt], 1)
+                            #print(f"Dampled indice: {temp}")
                             if temp not in used_indices:
                                 temp_indices = temp_indices + temp
                                 used_indices = used_indices + temp
                             if count >= 1000:
+                                print("Count 1000 reached")
                                 temp = random.sample(used_indices, n-k-len(temp_indices))
                                 if isinstance(temp, list):
                                     temp_indices = temp_indices + temp

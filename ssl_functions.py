@@ -387,7 +387,7 @@ def train_one_epoch(epoch,
     n_correct_u_lbs_meter.getAverage()
     n_strong_aug_meter.getAverage()
             
-    return loss_x_meter.avg, loss_u_meter.avg, loss_contrast_meter.avg, mask_meter.avg, pos_meter.avg, n_correct_u_lbs_meter.avg/n_strong_aug_meter.avg, queue_feats, queue_probs, queue_ptr, prob_list
+    return loss_x_meter.avg, loss_u_meter.avg, loss_contrast_meter.avg, mask_meter.avg, pos_meter.avg, n_correct_u_lbs_meter.avg/max(n_strong_aug_meter.avg, 0.000001), queue_feats, queue_probs, queue_ptr, prob_list
 
 
 def evaluate(model, ema_model, emb_model, dataloader, param):
@@ -516,23 +516,30 @@ def getExpertModelSSL(labelerId, sslDataset, seed, fold_idx, n_labeled, embedded
     n_iters_per_epoch = args["n_imgs_per_epoch"] // args["batchsize"]  # 1024
     n_iters_all = n_iters_per_epoch * args["n_epoches"]  # 1024 * 200
 
+    emb_model = EmbeddingModelL(out_path[:-5], args["dataset"], type=args["type"], param=param, seed=seed, fold=fold_idx)
+    
+
+    if args["expert_predict"] == "right":
+        args["n_classes"] = param["NUM_CLASSES"]
+
     #Erstellt das Modell
     model, criteria_x, ema_model = set_model(args)
+    logger.info("Total params: {:.2f}M".format(
+        sum(p.numel() for p in model.parameters()) / 1e6))
     #Lädt das trainierte eingebettete Modell
     #emb_model = EmbeddingModelL(os.getcwd() + "/SSL_Working", args["dataset"], type=args["type"])
 
-    emb_model = EmbeddingModelL(out_path[:-5], args["dataset"], type=args["type"], param=param, seed=seed, fold=fold_idx)
-    logger.info("Total params: {:.2f}M".format(
-        sum(p.numel() for p in model.parameters()) / 1e6))
-
-
-    if 'nih' in args["dataset"].lower(): #Erstellt den Experten mit seiner ID
+    if 'nih' in param["DATASET"].lower(): #Erstellt den Experten mit seiner ID
         exp = exper(int(args["labelerId"]))
+    else:
+        exp = exper(args["labelerId"])
         
-        dltrain_x, dltrain_u = sslDataset.get_train_loader_interface( 
+    dltrain_x, dltrain_u = sslDataset.get_train_loader_interface( 
             exp, args["batchsize"], args["mu"], n_iters_per_epoch, L=args["n_labeled"], method='comatch', pin_memory=False)
-        dlval = sslDataset.get_val_loader_interface(exp, batch_size=64, num_workers=param["num_worker"], fold_idx=fold_idx)
-        dtest = sslDataset.get_test_loader_interface(exp, batch_size=64, num_workers=param["num_worker"], fold_idx=fold_idx)
+    dlval = sslDataset.get_val_loader_interface(exp, batch_size=64, num_workers=param["num_worker"], fold_idx=fold_idx)
+    dtest = sslDataset.get_test_loader_interface(exp, batch_size=64, num_workers=param["num_worker"], fold_idx=fold_idx)
+
+    
 
     wd_params, non_wd_params = [], []
     for name, params in model.named_parameters():

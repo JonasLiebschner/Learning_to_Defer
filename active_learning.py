@@ -77,9 +77,8 @@ class NIHExpertDatasetMemory():
         self.preload = False
         self.PATH = param["PATH"]
         
-        normalize = transforms.Normalize(mean=[x / 255.0 for x in [125.3]],
-                                         std=[x / 255.0 for x in [63.0]])
-        self.transform_test = transforms.Compose([transforms.Resize(128), transforms.ToTensor(), normalize])
+        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        self.transform_test = transforms.Compose([transforms.Resize(param["IMAGE_SIZE"]), transforms.ToTensor(), normalize])
 
         self.image_container = image_container
 
@@ -182,13 +181,16 @@ def sampleIndices(n, k, all_indices, experten, seed = None, X=None, sample_equal
     
     if seed is not None:
         set_seed(seed, fold, text="")
+
+    all_indices_gt = {}
+    same_indices_gt = {}
     
     if X is not None and sample_equal:
-        all_indices_0 = [indice for indice in all_indices if X["GT"][indice] == 0]
-        all_indices_1 = [indice for indice in all_indices if X["GT"][indice] == 1]
-        same_indices_0 = random.sample(all_indices_0, round(k/2))
-        same_indices_1 = random.sample(all_indices_1, round(k/2))
-        same_indices = same_indices_0 + same_indices_1
+        same_indices = []
+        for gt in X["GT"].quinque():
+            all_indices_gt[gt] = [indice for indice in all_indices if X["GT"][indice] == gt]
+            same_indices_gt[gt] = random.sample(all_indices_gt[gt], round(k/len(X["GT"].quinque())))
+            same_indices += same_indices_gt[gt]
     else:
         same_indices = random.sample(all_indices, k)
         
@@ -200,19 +202,18 @@ def sampleIndices(n, k, all_indices, experten, seed = None, X=None, sample_equal
             indices[labelerId] = same_indices
     if k < n:
         for labelerId in experten:
+
+            working_indices = all_indices_gt
             temp_indices = []
             count = 0 # To avoid infinity loop
+            working_indices_gt = {}
 
             ######
             if sample_equal:
-                print(f"Indices with GT=0: {n/2} and with GT=1: {n/2}")
-                working_indices_gt[0] = all_indices_0
-                working_indices_gt[1] = all_indices_1
-                print(f"Len GT=0 {len(working_indices_gt[0])} and GT=1 {len(working_indices_gt[1])}")
-                for gt in [0, 1]:
-                    while len(temp_indices) < (n - round(k/2)):
+                for gt in X["GT"].quinque():
+                    while len(temp_indices) < (n - round(k/len(X["GT"].quinque()))):
                         count += 1
-                        temp = random.sample(working_indices_gt[gt], 1)
+                        temp = random.sample(all_indices_gt[gt], 1)
                         if temp not in used_indices:
                             temp_indices = temp_indices + temp
                             used_indices = used_indices + temp
@@ -324,7 +325,7 @@ def getQbQPoints(expert_models, data_loader, budget, mod=None, param=None):
                 preds = []
                 for i in range(outputs_exp.size()[0]):
                     pred_exp = outputs_exp.data[i].cpu().numpy()
-                    pred_exp = pred_exp[1]
+                    pred_exp = np.argmax(pred_exp)
                     #preds.append(round(pred_exp))
                     preds.append(pred_exp)
                     if (j == 0): #Add the indices only the first time
@@ -372,10 +373,12 @@ def getQbQPointsDifference(expert_models, data_loader, budget, mod=None, param=N
     assert ((mod is not None and (mod == "ssl" or mod == "al"))), "Give al or ssl as mod"
     
     prediction_matrix = None
+    prediction_matrix_values = None
     indices_all = []
     for data in data_loader:
         images, labels, _, indices, _, filenames = data
         experts_preds = []
+        experts_preds_values = []
         for j, expert_model in enumerate(expert_models):
             with torch.no_grad():
                 images = images.to(device)
@@ -391,46 +394,67 @@ def getQbQPointsDifference(expert_models, data_loader, budget, mod=None, param=N
                     outputs_exp = scores
                 
                 preds = []
+                preds_values = []
                 for i in range(outputs_exp.size()[0]):
                     pred_exp = outputs_exp.data[i].cpu().numpy()
-                    pred_exp = pred_exp[1]
+                    pred_exp = np.argmax(pred_exp)
                     #preds.append(round(pred_exp))
                     preds.append(pred_exp)
+                    preds_values.append(entropy(outputs_exp.data[i].cpu().numpy()))
                     if (j == 0): #Add the indices only the first time
                         indices_all.append(indices[i].item())
             experts_preds.append(np.array(preds))
+            experts_preds_values.append(np.array(preds_values))
 
         if prediction_matrix is None:
             prediction_matrix = np.swapaxes(np.array(experts_preds), 0, 1)
+            prediction_matrix_values = np.swapaxes(np.array(experts_preds_values), 0, 1)
         else:
             prediction_matrix = np.concatenate((prediction_matrix, np.swapaxes(np.array(experts_preds), 0, 1)), axis=0)
+            prediction_matrix_values = np.concatenate((prediction_matrix_values, np.swapaxes(np.array(experts_preds_values), 0, 1)), axis=0)
     predictions_matrix = prediction_matrix
 
-    #Get where the experts disagree
-    print(predictions_matrix.shape)
+    
+    indices_all = np.array(indices_all)
+    disagreement_indices = np.array([indices_all[i] for i in range(len(indices_all)) if disagree(prediction_matrix[i])])
+    disagreement_uncertainty = [prediction_matrix_values[i] for i in range(len(predictions_matrix)) if disagree(np.round(predictions_matrix[i]))]
+    points = np.array([np.sum(row) for row in disagreement_uncertainty])
 
-    matrixx = [row for row in predictions_matrix if disagree(np.round(row))]
-    points = np.array([np.sum(np.abs(row - 0.5)) for row in matrixx])
-
-    print("Disagreement on " + str(len(points)) + " Points")
-    if param["NEPTUNE"]["NEPTUNE"]:
-        run = param["NEPTUNE"]["RUN"]
-        run["Disagreement Points"].append(len(points))
-
-    ids = []
-    for row in np.array(matrixx)[points.argsort()[:budget].tolist()]:
-        ids.append(indices_all[np.argwhere(predictions_matrix == row)[0][0]])
+    ids = disagreement_indices[points.argsort()[-budget:].tolist()]
+    
+    print(f"disagreement ids {ids}")
+    print("Disagreement on " + str(len(ids)) + " Points")
 
     if len(ids) < budget:
-        matrixx = [row for row in predictions_matrix if not disagree(np.round(row))]
-        points = np.array([np.sum(np.abs(row - 0.5)) for row in matrixx])
-
-        for row in np.array(matrixx)[points.argsort()[:(budget - len(ids))].tolist()]:
-            ids.append(indices_all[np.argwhere(predictions_matrix == row)[0][0]])
-
-    print(ids)
+        agreement_indices = np.array([indices_all[i] for i in range(len(indices_all)) if not disagree(prediction_matrix[i])])
+        agreement_uncertainty = [prediction_matrix_values[i] for i in range(len(predictions_matrix)) if not disagree(predictions_matrix[i])]
+        agreement_points = np.array([np.sum(row) for row in agreement_uncertainty])
+        
+        print(f"Len agreement {len(agreement_indices)}")
+        print(f"Indices with agreement: {agreement_points.argsort()[-(budget-len(ids)):].tolist()}")
+        print(f"Added indices {agreement_indices[agreement_points.argsort()[-(budget-len(ids)):].tolist()]}")
+        
+        if len(ids) == 0:
+            ids = agreement_indices[agreement_points.argsort()[-(budget-len(ids)):].tolist()]
+        else:
+            np.concatenate((ids, agreement_indices[agreement_points.argsort()[-(budget-len(ids)):].tolist()]), axis=None)
     
-    #print("Disagreement on " + str(len(ids)) + " Points")
+    print("#########################")
+    print(f"points.argsort()[-budget:] {points.argsort()[-budget:].tolist()}")
+    print("disagreement_uncertainty")
+    print(disagreement_uncertainty)
+    print("points")
+    print(points)
+
+
+    print("active learning ids of dissagreement")
+    print(ids)
+    print("Confidence list")
+    print(points)
+    
+    assert len(ids) != 0, f"ids is empty "
+    
+    
     return ids[:budget]
 
 def getExpertModels(indices, experts, train_dataset, val_dataset, test_dataset, param=None, seed=None, fold=None, mod="", learning_mod="", prediction_type="", image_container=None):
@@ -469,11 +493,11 @@ def getExpertModels(indices, experts, train_dataset, val_dataset, test_dataset, 
         gc.collect()
         
         #expert_models.append(NetSimple(2, 3, 100, 100, 1000,500).to(device))
-        model_folder = param["Parent_PATH"]+"/SSL_Working/NIH/Embedded"
+        model_folder = param["Parent_PATH"]+f"/SSL_Working/{param['DATASET']}/Embedded"
         if param["cluster"]:
             model_folder += f"/Seed_{seed}_Fold_{fold}"
             
-        expert_models[labelerId] = ResnetPretrained(2, model_folder, type="50").to(device)
+        expert_models[labelerId] = ResnetPretrained(param["NUM_CLASSES"], model_folder, type="50", param=param).to(device)
         if torch.cuda.device_count() > 1:
             print("Use ", torch.cuda.device_count(), "GPUs!")
             expert_models[labelerId] = nn.DataParallel(expert_models[labelerId])
@@ -596,11 +620,11 @@ def getExpertModel(indices, train_dataset, val_dataset, test_dataset, expert, pa
     
     # train expert model on labeled data
     #model_expert = NetSimple(2, 3, 100, 100, 1000,500).to(device)
-    model_folder = param["Parent_PATH"]+"/SSL_Working/NIH/Embedded"
+    model_folder = param["Parent_PATH"]+f"/SSL_Working/{param['DATASET']}/Embedded"
     if param["cluster"]:
         model_folder += f"/Seed_{seed}_Fold_{fold}"
         
-    model_expert = ResnetPretrained(2, model_folder, type="50").to(device)
+    model_expert = ResnetPretrained(param["NUM_CLASSES"], model_folder, type="50", param=param).to(device)
     if torch.cuda.device_count() > 1:
         print("Use ", torch.cuda.device_count(), "GPUs!")
         model_expert = nn.DataParallel(model_expert)
@@ -700,11 +724,11 @@ def getExpertModelNormal(indices, train_dataset, val_dataset, test_dataset, expe
     
     # train expert model on labeled data
     #model_expert = NetSimple(2, 3, 100, 100, 1000,500).to(device)
-    model_folder = param["Parent_PATH"]+"/SSL_Working/NIH/Embedded"
+    model_folder = param["Parent_PATH"]+f"/SSL_Working/{param['DATASET']}/Embedded"
     if param["cluster"]:
         model_folder += f"/Seed_{seed}_Fold_{fold}"
     
-    model_expert = ResnetPretrained(2, model_folder, type="50").to(device)
+    model_expert = ResnetPretrained(param["NUM_CLASSES"], model_folder, type="50", param=param).to(device)
     if torch.cuda.device_count() > 1:
         print("Use ", torch.cuda.device_count(), "GPUs!")
         model_expert = nn.DataParallel(model_expert)
@@ -767,11 +791,18 @@ def train_expert_confidence(train_loader, optimizer, scheduler, epoch, apply_sof
     end = time.time()
     for i, (input, label, expert_pred, _, _, filenames ) in enumerate(train_loader):
         expert_pred = expert_pred.long()
-        target, input = expert_pred.to(device), input.to(device)
 
         if prediction_type == "right":
             expert_pred = (expert_pred == label) *1
         
+        target, input = expert_pred.to(device), input.to(device)
+
+        print("DELETE ME")
+        print("active_learning.py train_expert_confidence")
+        print("Targets")
+        print(target)
+        
+
         if mod_al:
             # compute output
             output = model(input)
@@ -781,6 +812,9 @@ def train_expert_confidence(train_loader, optimizer, scheduler, epoch, apply_sof
             scores = torch.softmax(logits, dim=1)
             #preds = torch.argmax(scores, dim=1).cpu().tolist()
             output = scores
+            
+        print("Outputs")
+        print(output)
         
         # compute loss
         if apply_softmax:
@@ -845,13 +879,17 @@ def run_expert(model, epochs, dataloaders, apply_softmax = False, param=None, id
     for epoch in range(0, epochs):
         # train for one epoch
         train_expert_confidence(train_loader=train_loader, model=model, expert=expert, optimizer=optimizer, scheduler=scheduler, epoch=epoch, apply_softmax=apply_softmax, param=param, 
-                                mod=mod, prediction_type=prediction_type)
-        #if epoch % 10 == 0 and epoch != epochs and epoch != 0:
-        #   print("Eval")
-        #    metrics_print_expert(model, val_loader, id, seed=seed, fold=fold, mod=mod, prediction_type=prediction_type, expert=expert, param=param)
-        met = metrics_print_expert(model, data_loader=val_loader, id=id, seed=seed, fold=fold, n_images=n_images, mod=mod, prediction_type=prediction_type, expert=expert, param=param, 
-                                   print_result=False, step="Train", epoch=epoch)
-        train_metrics.append(met)
+                                mod=mod, prediction_type=param["EXPERT_PREDICT"])
+
+        if param["DATASET"] == "NIH":
+            met = metrics_print_expert(model, data_loader=val_loader, id=id, seed=seed, fold=fold, n_images=n_images, mod=mod, prediction_type=prediction_type, expert=expert, 
+                                       param=param, print_result=False, step="Train", epoch=epoch)
+            train_metrics.append(met)
+        elif "CIFAR" in param["DATASET"]:
+            if epoch%10 == 0:
+                met = metrics_print_expert(model, data_loader=val_loader, id=id, seed=seed, fold=fold, n_images=n_images, mod=mod, prediction_type=prediction_type, expert=expert, 
+                                           param=param, print_result=False, step="Train", epoch=epoch)
+                train_metrics.append(met)
             
     val_metrics = metrics_print_expert(model, data_loader=val_loader, id=id, seed=seed, fold=fold, n_images=n_images, expert=expert, mod=mod, prediction_type=prediction_type, param=param, step="Val")
 
@@ -881,8 +919,9 @@ def metrics_print_expert(model, data_loader, expert=None, defer_net = False, id=
         for data in data_loader:
             images, label, expert_pred, _ ,_, filenames = data
             expert_pred = expert_pred.long()
-            if prediction_type == "right":
+            if param["EXPERT_PREDICT"] == "right":
                 expert_pred = (expert_pred == label) *1
+
             images, labels = images.to(device), expert_pred.to(device)
 
             if mod == "al":
@@ -898,22 +937,14 @@ def metrics_print_expert(model, data_loader, expert=None, defer_net = False, id=
             elif mod == "perfect":
                 predictions = expert_pred.to(device)
 
-            if cou == 1:
-                print("###########")
-                print("Predictions:")
-                print(predictions)
-                #print(preds)
-                #print(preds2)
-                cou = 2
-
             total += labels.size(0)
-            correct += (predictions == labels).sum().item()
+            #correct += (predictions == labels).sum().item()
+            correct += torch.sum(predictions == labels).item()
 
             label_list.extend(labels.cpu().numpy())
             predictions_list.extend(predictions.cpu().numpy())
             
-
-                             
+                    
     label_list = np.array(label_list)
     predictions_list = np.array(predictions_list)
 
@@ -924,12 +955,16 @@ def metrics_print_expert(model, data_loader, expert=None, defer_net = False, id=
         print(prediction_type)
         print('Accuracy of the network on the %d test images: %.3f %%' % (total, accurancy))
 
-    if param["n_classes"] == 2:
+    print("Unique values")
+    print(f"True: {np.unique(label_list)}")
+    print(f"Predicted: {np.unique(predictions_list)}")
+
+    if param["NUM_CLASSES"] == 2:
         tn, fp, fn, tp = sklearn.metrics.confusion_matrix(label_list, predictions_list, labels=[0, 1]).ravel()
         f1 = sklearn.metrics.f1_score(label_list, predictions_list)
         ac_balanced = sklearn.metrics.balanced_accuracy_score(label_list, predictions_list)
-        f_05 = fbeta_score(y_true, y_pred, beta=0.5)
-        f_2 = fbeta_score(y_true, y_pred, beta=2)
+        f_05 = fbeta_score(label_list, predictions_list, beta=0.5)
+        f_2 = fbeta_score(label_list, predictions_list, beta=2)
 
         met = {
             "tn": tn,
@@ -942,12 +977,12 @@ def metrics_print_expert(model, data_loader, expert=None, defer_net = False, id=
             "f2": f_2,
             "accurancy_balanced": ac_balanced,
         }
-    if param["n_classes"] >= 2:
-        conf_matrix = sklearn.metrics.confusion_matrix(label_list, predictions_list, labels=[i for i in range(param["n_classes"])]).ravel()
+    if param["NUM_CLASSES"] >= 2:
+        conf_matrix = sklearn.metrics.confusion_matrix(label_list, predictions_list, labels=[i for i in range(param["NUM_CLASSES"])]).ravel()
         f1 = sklearn.metrics.f1_score(label_list, predictions_list, average="macro")
         ac_balanced = sklearn.metrics.balanced_accuracy_score(label_list, predictions_list)
-        f_05 = fbeta_score(y_true, y_pred, average="macro", beta=0.5)
-        f_2 = fbeta_score(y_true, y_pred, average="macro", beta=2)
+        f_05 = fbeta_score(label_list, predictions_list, average="macro", beta=0.5)
+        f_2 = fbeta_score(label_list, predictions_list, average="macro", beta=2)
 
         met = {
             "conf_matrix": conf_matrix,
@@ -985,7 +1020,7 @@ def metrics_print_expert(model, data_loader, expert=None, defer_net = False, id=
 
     if print_result:
         print("Confusion Matrix:")
-        print(sklearn.metrics.confusion_matrix(label_list, predictions_list, labels=[i for i in range(param["n_classes"])]))
+        print(sklearn.metrics.confusion_matrix(label_list, predictions_list, labels=[i for i in range(param["NUM_CLASSES"])]))
         print("F1 Score: " + str(f1))
 
         print("Accuracy balanced")
@@ -1000,7 +1035,7 @@ def testExpert(expert, dataset, image_container, param, mod, prediction_type, se
     final_dataset = NIHExpertDatasetMemory(None, dataset.getAllFilenames(), np.array(dataset.getAllTargets()), expert.predict , [1]*len(dataset.getAllIndices()), 
                                                        dataset.getAllIndices(), param=param, preload=True, image_container=image_container)
 
-    data_loader = DataLoader(dataset=final_dataset, batch_size=128, shuffle=True, num_workers=param["num_worker"], pin_memory=True)
+    data_loader = DataLoader(dataset=final_dataset, batch_size=256, shuffle=True, num_workers=param["num_worker"], pin_memory=True)
 
     if param["NEPTUNE"]["NEPTUNE"]:
         run = param["NEPTUNE"]["RUN"]

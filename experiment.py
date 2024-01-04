@@ -396,7 +396,9 @@ def getExpertsSSL_AL(dataManager, param, fold, seed):
             metrics[labelerId] = metrics_return
             indices_labeled[labelerId] = labeled
     elif param["MOD"] == "disagreement" or param["MOD"] == "disagreement_diff":
-        met, metrics, indices_labeled = getExpertModelsSSL_AL(dataManager, experts, param, seed, fold, learning_mod="ssl", prediction_type=param["EXPERT_PREDICT"])
+        met, metrics, labeled = getExpertModelsSSL_AL(dataManager, experts, param, seed, fold, learning_mod="ssl", prediction_type=param["EXPERT_PREDICT"])
+        for i, labelerId in enumerate(param["LABELER_IDS"]):
+            indices_labeled[labelerId] = labeled
         
     return experts, metrics, {"starting labels": indices, "al labels": indices_labeled}
 
@@ -547,9 +549,11 @@ def getExpertsAL(dataManager, param, fold_idx, seed):
             metrics[labelerId] = metric
             indeces_al[labelerId] = indices_labeled
     if param["MOD"] == "disagreement" or param["MOD"]=="disagreement_diff":
-        expert_models, met, metrics, indeces_al = al.getExpertModels(indices, experts, expert_train_dataset, expert_val_dataset, expert_test_dataset, param, seed, fold_idx, mod=param["MOD"], image_container=image_container, learning_mod="al", prediction_type=param["EXPERT_PREDICT"])
+        expert_models, met, metrics, indices_labeled = al.getExpertModels(indices, experts, expert_train_dataset, expert_val_dataset, expert_test_dataset, param, seed, fold_idx, mod=param["MOD"], image_container=image_container, learning_mod="al", prediction_type=param["EXPERT_PREDICT"])
         for labelerId, expert in experts.items():
             expert.setModel(expert_models[labelerId], mod="AL")
+            indeces_al[labelerId] = indices_labeled
+            
 
     return experts, metrics, {"starting labels": labeld_filenames, "al labels": indeces_al}
 
@@ -620,9 +624,11 @@ def getExpertsNormal(dataManager, param, fold_idx, seed):
 def getExpertsPerfect(dataManager, param, fold, seed):
 
     experts = {}
+    labeled_filenames = {}
     for i, labelerId in enumerate(list(param["LABELER_IDS"])):
         nih_expert = expert_module.Expert(dataset = dataManager.getBasicDataset(), labeler_id=labelerId, modus="perfect")
         experts[labelerId] = nih_expert
+        labeled_filenames[labelerId] = nih_expert.data.copy()["Image ID"]
 
 
     sslDataset = dataManager.getSSLDataset(seed)
@@ -664,7 +670,7 @@ def getExpertsPerfect(dataManager, param, fold, seed):
             "End": met
         }
 
-    return experts, metrics
+    return experts, metrics, {"starting labels": labeled_filenames}
 
 
 # In[13]:
@@ -674,7 +680,7 @@ def getExperts(dataManager, param, seed, fold):
       
     #Creates expert models for the choosen method
     if param["SETTING"] == "PERFECT":
-        experts, metrics = getExpertsPerfect(dataManager, param, fold, seed)
+        experts, metrics, labeled_filenames = getExpertsPerfect(dataManager, param, fold, seed)
     if param["SETTING"] == "AL":
         experts, metrics, labeled_filenames = getExpertsAL(dataManager, param, fold, seed)
     elif param["SETTING"] == "SSL":
@@ -772,7 +778,10 @@ def one_run(dataManager, run_param, all_metrics, print_text, run_metrics, count,
 
         #Iterate over the folds
         #for fold_idx in range(run_param["K"]):
-        for fold_idx in range(2):
+        fold_count = 1
+        if run_param["SETTING"] == "PERFECT":
+            fold_count = 5
+        for fold_idx in range(fold_count):
 
             #Check if the seed-fold combination is already in the save files
             if fold_idx in expert_metrics[seed].keys():
@@ -937,24 +946,39 @@ def run_experiment(param):
         elif param["DATASET"] == "CIFAR100":
             dataManager = cif100.CIFAR100DataManager(path=param["PATH"], path_labels=f'{param["PATH"]}{param["DATASET"]}', path_data=f'{param["PATH"]}/{param["DATASET"]}', param=run_param, seeds=param["SEEDS"])
         dataManager.createData()
+        
+        print("DataManager created")
 
         run_param["DATASET"] = param["DATASET"]
 
         for init_size in param["AL"]["INITIAL_SIZE"]:
             run_param["AL"]["INITIAL_SIZE"] = init_size
+            
+            print("1")
 
             for labels_per_round in param["AL"]["LABELS_PER_ROUND"]:
                 run_param["AL"]["LABELS_PER_ROUND"] = labels_per_round
 
                 for rounds in param["AL"]["ROUNDS"]:
                     run_param["AL"]["ROUNDS"] = rounds
+                    
+                    print("2")
 
                     labeled = init_size + rounds * labels_per_round
+                    
+                    print(labeled)
 
                     run_param["LABELED"] = labeled
+                    
+                    max_labeld = 50
+                    if run_param["DATASET"] == "NIH":
+                        max_labeled = 70
 
-                    if (labeled >= 128): #Prevents from large amount of data
+                    if (labeled >= max_labeld): #Prevents from large amount of data
                         continue
+                        
+                    print("3")
+                    
 
                     for cost in param["AL"]["COST"]:
                         run_param["AL"]["COST"] = cost
@@ -968,8 +992,11 @@ def run_experiment(param):
                         
                                 for mod in param["MOD"]:
                                     run_param["MOD"] = mod
+                                    
+                                    print("Pos 4")
 
                                     if ((setting == "AL"  or setting=="SSL_AL" or setting=="SSL_AL_SSL") and (mod not in ["confidence", "disagreement", "disagreement_diff"])):
+                                        print("4.1")
                                         continue
 
                                     if (setting == "SSL" and mod != "ssl"):
@@ -977,12 +1004,17 @@ def run_experiment(param):
 
                                     if (setting == "NORMAL" and mod != "normal"):
                                         continue
+                                        
+                                    if (setting == "PERFECT" and mod != "perfect"):
+                                        continue
 
                                     for expert_predict in param["EXPERT_PREDICT"]:
                                         run_param["EXPERT_PREDICT"] = expert_predict
 
                                         #if ((setting == "SSL" or setting == "SSL_AL" or setting == "SSL_AL_SSL") and (expert_predict == "right")):
                                         #    continue
+                                        
+                                        print("5")
 
                                         if (expert_predict == "target") and (cost != param["AL"]["COST"][0]):
                                             continue
@@ -994,8 +1026,12 @@ def run_experiment(param):
 
                                             for epochs_pretrain in param["epochs_pretrain"]:
                                                 run_param["epochs_pretrain"] = epochs_pretrain
+                                                
+                                                print("Inner loop")
 
                                                 run_param = build_param(run_param)
+                                                
+                                                print("Param build")
 
                                                 metrics_save = {}
                                                 metrics_save["labeler_ids"] = labeler_ids
@@ -1137,8 +1173,11 @@ def create_label_df(dataset, experts):
     gt = pd.DataFrame({"filename": dataset.getAllFilenames(), "gt": dataset.getAllTargets()})
     result = gt.copy()
     for expert_id, expert in experts.items():
+        print(f"expert modus {expert.modus}")
         if "ssl" in expert.modus:
             expert_df = pd.DataFrame({"filename": expert.prebuild_filenames_ssl, f"prediction_{expert_id}": expert.prebuild_predictions_ssl})
+        elif "perfect" in expert.modus:
+            expert_df = pd.DataFrame({"filename": expert.data.copy()["Image ID"], f"prediction_{expert_id}": expert.data.copy()[str(expert.labelerId)]})
         else:
             expert_df = pd.DataFrame({"filename": expert.prebuild_filenames_al, f"prediction_{expert_id}": expert.prebuild_predictions_al})
         result = pd.merge(result, expert_df)
@@ -1171,14 +1210,18 @@ def get_labeled_images_df(labeled_filenames):
     for i in range(1, len(dfs)):
         starting_labels = pd.merge(starting_labels, dfs[i], how="outer")
 
-    dfs = []
-    for labelerId, filelist in labeled_filenames["al labels"].items():
-        dfs.append(pd.DataFrame({"filename": filelist, f"{labelerId}_al_label": [1 for i in range(len(filelist))]}))
-    al_labels = dfs[0]
-    for i in range(1, len(dfs)):
-        al_labels = pd.merge(al_labels, dfs[i], how="outer")
+    if "al labels" in labeled_filenames:
 
-    return pd.merge(starting_labels, al_labels, how="outer")
+        dfs = []
+        for labelerId, filelist in labeled_filenames["al labels"].items():
+            dfs.append(pd.DataFrame({"filename": filelist, f"{labelerId}_al_label": [1 for i in range(len(filelist))]}))
+        al_labels = dfs[0]
+        for i in range(1, len(dfs)):
+            al_labels = pd.merge(al_labels, dfs[i], how="outer")
+    
+        return pd.merge(starting_labels, al_labels, how="outer")
+    else:
+        return starting_labels
 
 #CUDA_LAUNCH_BLOCKING=1
 #torch.backends.cudnn.benchmark = True
@@ -1189,9 +1232,9 @@ def build_param_from_json(data, path, num_worker):
     param["PATH"] = f"{path}/{data['PATH']}"
     param["ckp_dir"] = f"{path}/{data['ckp_dir']}"
     param["num_worker"] = num_worker
-    param["AL"]["COST"] = []
-    for element in data["AL"]["COST"]:
-        param["AL"]["COST"].append((element[0], element[1]))
+    costs = [tuple(cost) for cost in data["AL"]["COST"]]
+    param["AL"]["COST"] = costs
+    print(f"Cost: {param['AL']['COST']}")
     return param
 
 # In[ ]:
@@ -1383,16 +1426,16 @@ def build_param(param):
             param["n_classes"] = 10
             pass
     elif param["DATASET"] == "CIFAR100":
-        param["SSL"]["N_IMGS_PER_EPOCH"] = 800 # Anpassen
+        param["SSL"]["N_IMGS_PER_EPOCH"] = 35000 # Anpassen
         param["IMAGE_SIZE"] = 32
-        param["EMBEDDED"]["ARGS"]["num_classes"] = 100
+        param["EMBEDDED"]["ARGS"]["num_classes"] = 20
         if param["EXPERT_PREDICT"] == "right":
             param["NUM_CLASSES"] = 2
-            param["n_classes"] = 2
+            param["n_classes"] = 20
         elif param["EXPERT_PREDICT"] == "target":
-            param["NUM_CLASSES"] = 100
-            param["n_classes"] = 100
-            pass
+            param["NUM_CLASSES"] = 20
+            param["n_classes"] = 20
+            
     return param
 
 if __name__ == "__main__":
