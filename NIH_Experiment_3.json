@@ -2,7 +2,7 @@
     "DATASET": "NIH",
     "PATH": "Datasets/NIH/",
     "TARGET": "Airspace_Opacity",
-    "LABELER_IDS": [[4323195249, 4295232296], [4295349121, 4295342357], [4295342357, 4295354117]],
+    "LABELER_IDS": [[4295349121, 4295342357, 4295354117]],
     "K": 10,
     "SEEDS": [1, 2, 3, 4],
     "GT": true,
@@ -11,9 +11,9 @@
     "OVERLAP": [0, 100],
     "SAMPLE_EQUAL": [false, true],
 
-    "SETTING": ["SSL_AL"],
+    "SETTING": ["AL", "SSL", "SSL_AL"],
 
-    "NUM_EXPERTS": 2,
+    "NUM_EXPERTS": 3,
     "NUM_CLASSES": 2,
 
     "EXPERT_PREDICT": ["target", "right"],

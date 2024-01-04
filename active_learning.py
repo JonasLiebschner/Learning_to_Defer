@@ -414,36 +414,47 @@ def getQbQPointsDifference(expert_models, data_loader, budget, mod=None, param=N
             prediction_matrix_values = np.concatenate((prediction_matrix_values, np.swapaxes(np.array(experts_preds_values), 0, 1)), axis=0)
     predictions_matrix = prediction_matrix
 
-    #Get where the experts disagree
-    print(predictions_matrix.shape)
+    
+    indices_all = np.array(indices_all)
+    disagreement_indices = np.array([indices_all[i] for i in range(len(indices_all)) if disagree(prediction_matrix[i])])
+    disagreement_uncertainty = [prediction_matrix_values[i] for i in range(len(predictions_matrix)) if disagree(np.round(predictions_matrix[i]))]
+    points = np.array([np.sum(row) for row in disagreement_uncertainty])
 
-    matrixx = [row for row in predictions_matrix if disagree(np.round(row))]
-    matrixx_values = [prediction_matrix_values[i] for i in len(predictions_matrix) if disagree(np.round(predictions_matrix[i]))]
-    points = np.array([np.sum(row) for row in matrixx_values])
-    #points = np.array([np.sum(np.abs(row - 0.5)) for row in matrixx])
-
-    print("Disagreement on " + str(len(points)) + " Points")
-    if param["NEPTUNE"]["NEPTUNE"]:
-        run = param["NEPTUNE"]["RUN"]
-        run["Disagreement Points"].append(len(points))
-
-    ids = []
-    for row in np.array(matrixx)[points.argsort()[budget-:].tolist()]:
-        ids.append(indices_all[np.argwhere(predictions_matrix == row)[0][0]])
+    ids = disagreement_indices[points.argsort()[-budget:].tolist()]
+    
+    print(f"disagreement ids {ids}")
+    print("Disagreement on " + str(len(ids)) + " Points")
 
     if len(ids) < budget:
-        matrixx = [row for row in predictions_matrix if not disagree(np.round(row))]
-        points = np.array([np.sum(np.abs(row - 0.5)) for row in matrixx])
+        agreement_indices = np.array([indices_all[i] for i in range(len(indices_all)) if not disagree(prediction_matrix[i])])
+        agreement_uncertainty = [prediction_matrix_values[i] for i in range(len(predictions_matrix)) if not disagree(predictions_matrix[i])]
+        agreement_points = np.array([np.sum(row) for row in agreement_uncertainty])
+        
+        print(f"Len agreement {len(agreement_indices)}")
+        print(f"Indices with agreement: {agreement_points.argsort()[-(budget-len(ids)):].tolist()}")
+        print(f"Added indices {agreement_indices[agreement_points.argsort()[-(budget-len(ids)):].tolist()]}")
+        
+        if len(ids) == 0:
+            ids = agreement_indices[agreement_points.argsort()[-(budget-len(ids)):].tolist()]
+        else:
+            np.concatenate((ids, agreement_indices[agreement_points.argsort()[-(budget-len(ids)):].tolist()]), axis=None)
+    
+    print("#########################")
+    print(f"points.argsort()[-budget:] {points.argsort()[-budget:].tolist()}")
+    print("disagreement_uncertainty")
+    print(disagreement_uncertainty)
+    print("points")
+    print(points)
 
-        for row in np.array(matrixx)[points.argsort()[:(budget - len(ids))].tolist()]:
-            ids.append(indices_all[np.argwhere(predictions_matrix == row)[0][0]])
 
     print("active learning ids of dissagreement")
     print(ids)
     print("Confidence list")
     print(points)
     
-    #print("Disagreement on " + str(len(ids)) + " Points")
+    assert len(ids) != 0, f"ids is empty "
+    
+    
     return ids[:budget]
 
 def getExpertModels(indices, experts, train_dataset, val_dataset, test_dataset, param=None, seed=None, fold=None, mod="", learning_mod="", prediction_type="", image_container=None):
@@ -948,7 +959,7 @@ def metrics_print_expert(model, data_loader, expert=None, defer_net = False, id=
     print(f"True: {np.unique(label_list)}")
     print(f"Predicted: {np.unique(predictions_list)}")
 
-    if param["n_classes"] == 2:
+    if param["NUM_CLASSES"] == 2:
         tn, fp, fn, tp = sklearn.metrics.confusion_matrix(label_list, predictions_list, labels=[0, 1]).ravel()
         f1 = sklearn.metrics.f1_score(label_list, predictions_list)
         ac_balanced = sklearn.metrics.balanced_accuracy_score(label_list, predictions_list)
@@ -966,8 +977,8 @@ def metrics_print_expert(model, data_loader, expert=None, defer_net = False, id=
             "f2": f_2,
             "accurancy_balanced": ac_balanced,
         }
-    if param["n_classes"] >= 2:
-        conf_matrix = sklearn.metrics.confusion_matrix(label_list, predictions_list, labels=[i for i in range(param["N_CLASSES"])]).ravel()
+    if param["NUM_CLASSES"] >= 2:
+        conf_matrix = sklearn.metrics.confusion_matrix(label_list, predictions_list, labels=[i for i in range(param["NUM_CLASSES"])]).ravel()
         f1 = sklearn.metrics.f1_score(label_list, predictions_list, average="macro")
         ac_balanced = sklearn.metrics.balanced_accuracy_score(label_list, predictions_list)
         f_05 = fbeta_score(label_list, predictions_list, average="macro", beta=0.5)
@@ -1009,7 +1020,7 @@ def metrics_print_expert(model, data_loader, expert=None, defer_net = False, id=
 
     if print_result:
         print("Confusion Matrix:")
-        print(sklearn.metrics.confusion_matrix(label_list, predictions_list, labels=[i for i in range(param["n_classes"])]))
+        print(sklearn.metrics.confusion_matrix(label_list, predictions_list, labels=[i for i in range(param["NUM_CLASSES"])]))
         print("F1 Score: " + str(f1))
 
         print("Accuracy balanced")

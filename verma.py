@@ -121,7 +121,7 @@ def train(model, train_loader, valid_loader, test_loader, expert_fns, config, se
             n_classes,
             config["alpha"],
             config,
-            param
+            param=param
         )
 
         experts_fns_eval = []
